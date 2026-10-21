@@ -2,17 +2,15 @@ services:
   - type: web
     name: sync-api
     env: python
-    region: singapore   # Closest to India
+    region: singapore
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: DATABASE_URL
-        sync: false       # Set manually in Render dashboard from Supabase
       - key: SUPABASE_URL
-        sync: false
+        value: https://pnfleqdwvbnerpjwqoqe.supabase.co
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: SUPABASE_BUCKET
