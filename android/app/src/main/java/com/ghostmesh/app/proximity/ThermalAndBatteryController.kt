@@ -39,15 +39,14 @@ class ThermalAndBatteryController(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && powerManager != null) {
             thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
                 when (status) {
-                    PowerManager.THERMAL_STATUS_MODERATE -> {
-                        Log.w(TAG, "Moderate device heating detected. Switching to Smart Discovery.")
-                        onThrottleRequired("Device Warming (Moderate)", false)
-                    }
-                    PowerManager.THERMAL_STATUS_SEVERE,
-                    PowerManager.THERMAL_STATUS_CRITICAL,
                     PowerManager.THERMAL_STATUS_EMERGENCY -> {
-                        Log.e(TAG, "Severe heating detected. Pausing radar immediately.")
-                        onThrottleRequired("Severe Device Heating", true)
+                        Log.e(TAG, "Hardware Emergency Thermal Limit reached (>60°C). Pausing radar safely.")
+                        onThrottleRequired("Hardware Emergency Heating", true)
+                    }
+                    PowerManager.THERMAL_STATUS_MODERATE,
+                    PowerManager.THERMAL_STATUS_SEVERE,
+                    PowerManager.THERMAL_STATUS_CRITICAL -> {
+                        Log.i(TAG, "Device warm (thermal status: $status). Maintaining active radar.")
                     }
                     PowerManager.THERMAL_STATUS_NONE,
                     PowerManager.THERMAL_STATUS_LIGHT -> {

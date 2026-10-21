@@ -320,7 +320,6 @@ class MainActivity : ComponentActivity() {
                 thermalController.startMonitoring()
                 onDispose {
                     thermalController.stopMonitoring()
-                    bleManager.stopRadar()
                 }
             }
 
