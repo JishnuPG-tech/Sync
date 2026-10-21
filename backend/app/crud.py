@@ -151,7 +151,7 @@ def get_nearby_active_users(
                 bio=user.get("bio", ""),
                 location=user.get("location_name", ""),
                 avatar_url=user.get("avatar_url"),
-                interests=interests if interests else ["Nearby"],
+                interests=[],
                 approx_distance_meters=dist,
                 connection_status=conn_status
             )

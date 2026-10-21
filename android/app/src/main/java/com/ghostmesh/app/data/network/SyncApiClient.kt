@@ -143,7 +143,7 @@ class SyncApiClient {
         bio: String,
         location: String,
         avatarUrl: String?,
-        interests: List<String> = listOf("Tech", "Design", "Music")
+        interests: List<String> = emptyList()
     ): Result<UserProfile> {
         val payload = JSONObject().apply {
             put("display_name", displayName.trim())
@@ -212,7 +212,7 @@ class SyncApiClient {
                         encounterId = obj.getString("user_id"),
                         displayName = obj.getString("display_name"),
                         introduction = obj.optString("bio").takeIf { it.isNotEmpty() },
-                        interests = if (interestsList.isNotEmpty()) interestsList else listOf("Nearby"),
+                        interests = interestsList,
                         confidenceTier = tier,
                         isCurrentlyInRange = true,
                         distanceDisplay = "${distMeters.toInt()}m",
@@ -259,7 +259,7 @@ class SyncApiClient {
                         sender_id = obj.getString("sender_id"),
                         sender_display_name = obj.getString("sender_display_name"),
                         sender_introduction = obj.optString("sender_bio").takeIf { it.isNotEmpty() },
-                        sender_interests = if (interestsList.isNotEmpty()) interestsList else listOf("Tech"),
+                        sender_interests = interestsList,
                         sender_avatar_asset = obj.optString("sender_avatar_url").takeIf { it.isNotEmpty() } ?: "",
                         status = obj.optString("status", "PENDING"),
                         created_at = "Just now"
@@ -301,7 +301,7 @@ class SyncApiClient {
                         display_name = obj.getString("display_name"),
                         instagram_username = obj.getString("instagram_username"),
                         introduction = obj.optString("bio").takeIf { it.isNotEmpty() },
-                        interests = if (interestsList.isNotEmpty()) interestsList else listOf("Connected"),
+                        interests = interestsList,
                         connected_at = "Connected"
                     )
                 )

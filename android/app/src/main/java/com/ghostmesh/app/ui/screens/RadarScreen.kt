@@ -626,32 +626,6 @@ fun SyncPeerCard(
                             maxLines = 2
                         )
                     }
-
-                    // Interest Tags
-                    if (peer.interests.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            peer.interests.take(4).forEach { tag ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(AuraTheme.colors.surfaceSubtle)
-                                        .border(1.dp, AuraTheme.colors.border, RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = tag,
-                                        fontFamily = DmMonoFontFamily,
-                                        fontSize = 9.5.sp,
-                                        color = AuraTheme.colors.inkSecondary
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
