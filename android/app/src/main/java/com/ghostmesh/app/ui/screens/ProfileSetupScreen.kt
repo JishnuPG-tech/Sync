@@ -725,7 +725,8 @@ fun ProfileSetupScreen(
                                 instagramUsername = user.instagram_username,
                                 bio = bio,
                                 location = locationInput,
-                                avatar = avatarToSave
+                                avatar = avatarToSave,
+                                bleToken = user.ble_token ?: user.id
                             )
                             onProfileCreated(
                                 user.id,

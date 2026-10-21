@@ -51,7 +51,7 @@ class BleDiscoveryManager(
                 val scanRecord = it.scanRecord ?: return
                 val serviceData = scanRecord.getServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID))
                 val rawToken = if (serviceData != null) {
-                    String(serviceData, StandardCharsets.UTF_8)
+                    bytesToUuidString(serviceData)
                 } else {
                     it.device.address ?: "unknown"
                 }
@@ -65,6 +65,36 @@ class BleDiscoveryManager(
 
         override fun onScanFailed(errorCode: Int) {
             Log.e(TAG, "BLE Scan Failed: $errorCode")
+        }
+    }
+
+    private fun uuidToBytes(uuidStr: String): ByteArray {
+        return try {
+            val clean = uuidStr.replace("-", "").trim()
+            val bytes = ByteArray(clean.length / 2)
+            for (i in bytes.indices) {
+                bytes[i] = clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+            }
+            bytes
+        } catch (e: Exception) {
+            uuidStr.toByteArray(StandardCharsets.UTF_8).take(16).toByteArray()
+        }
+    }
+
+    private fun bytesToUuidString(bytes: ByteArray): String {
+        return try {
+            if (bytes.size == 16) {
+                val sb = java.lang.StringBuilder()
+                for (b in bytes) {
+                    sb.append(String.format("%02x", b))
+                }
+                val raw = sb.toString()
+                "${raw.substring(0, 8)}-${raw.substring(8, 12)}-${raw.substring(12, 16)}-${raw.substring(16, 20)}-${raw.substring(20)}"
+            } else {
+                String(bytes, StandardCharsets.UTF_8)
+            }
+        } catch (e: Exception) {
+            String(bytes, StandardCharsets.UTF_8)
         }
     }
 
@@ -99,7 +129,7 @@ class BleDiscoveryManager(
         advertiser = bluetoothAdapter.bluetoothLeAdvertiser
         scanner = bluetoothAdapter.bluetoothLeScanner
 
-        val tokenBytes = ephemeralToken.toByteArray(StandardCharsets.UTF_8)
+        val tokenBytes = uuidToBytes(ephemeralToken)
 
         val hasBt5Hardware = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 bluetoothAdapter.isLeExtendedAdvertisingSupported &&
@@ -264,9 +294,9 @@ class BleDiscoveryManager(
                 .build()
 
             val data = AdvertiseData.Builder()
-                .addServiceUuid(ParcelUuid(GHOSTMESH_SERVICE_UUID))
                 .addServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID), tokenBytes)
                 .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
                 .build()
 
             advertiser?.startAdvertising(settings, data, legacyAdvertiseCallback)
@@ -291,9 +321,9 @@ class BleDiscoveryManager(
                 .build()
 
             val data = AdvertiseData.Builder()
-                .addServiceUuid(ParcelUuid(GHOSTMESH_SERVICE_UUID))
                 .addServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID), tokenBytes)
                 .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
                 .build()
 
             advertiser?.startAdvertising(settings, data, legacyAdvertiseCallback)
@@ -305,9 +335,10 @@ class BleDiscoveryManager(
 
     @SuppressLint("MissingPermission")
     private fun startConfiguredScan(hasBt5Hardware: Boolean) {
-        val scanFilter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(GHOSTMESH_SERVICE_UUID))
-            .build()
+        val filters = listOf(
+            ScanFilter.Builder().setServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID), null).build(),
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(GHOSTMESH_SERVICE_UUID)).build()
+        )
 
         val scanSettingsBuilder = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
@@ -317,7 +348,7 @@ class BleDiscoveryManager(
             try {
                 scanSettingsBuilder.setLegacy(false)
                 scanSettingsBuilder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
-                scanner?.startScan(listOf(scanFilter), scanSettingsBuilder.build(), scanCallback)
+                scanner?.startScan(filters, scanSettingsBuilder.build(), scanCallback)
                 Log.i(TAG, "BLE Scanner active with PHY_LE_ALL_SUPPORTED")
                 return
             } catch (e: IllegalArgumentException) {
@@ -330,7 +361,7 @@ class BleDiscoveryManager(
                 .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                 .setReportDelay(0)
                 .build()
-            scanner?.startScan(listOf(scanFilter), legacySettings, scanCallback)
+            scanner?.startScan(filters, legacySettings, scanCallback)
             Log.i(TAG, "BLE Scanner active with Legacy ScanSettings")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start legacy BLE scanner", e)

@@ -20,7 +20,18 @@ data class UserProfile(
     val photo_uri: String? = null,
     val interests: List<String> = emptyList(),
     val is_discovery_active: Boolean = true,
-    val is_instagram_verified: Boolean = true
+    val is_instagram_verified: Boolean = true,
+    val ble_token: String? = null
+)
+
+data class NearbyUserCardDto(
+    val userId: String,
+    val displayName: String,
+    val bio: String = "",
+    val location: String = "",
+    val avatarUrl: String? = null,
+    val approxDistanceMeters: Double = 0.0,
+    val connectionStatus: String = "NONE"
 )
 
 /**

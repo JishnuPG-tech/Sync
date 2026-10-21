@@ -4,6 +4,7 @@ import android.util.Base64
 import com.ghostmesh.app.data.model.ConnectionRequestIncoming
 import com.ghostmesh.app.data.model.MutualConnection
 import com.ghostmesh.app.data.model.NearbyPeerUiModel
+import com.ghostmesh.app.data.model.NearbyUserCardDto
 import com.ghostmesh.app.data.model.UserProfile
 import com.ghostmesh.app.proximity.ConfidenceCategory
 import kotlinx.coroutines.Dispatchers
@@ -170,7 +171,8 @@ class SyncApiClient {
                 introduction = obj.optString("bio", ""),
                 photo_uri = obj.optString("avatar_url").takeIf { it.isNotEmpty() },
                 is_discovery_active = obj.optBoolean("is_discovery_active", true),
-                is_instagram_verified = true
+                is_instagram_verified = true,
+                ble_token = obj.optString("ble_token").takeIf { it.isNotEmpty() }
             )
         }
     }
@@ -186,6 +188,29 @@ class SyncApiClient {
             method = "POST",
             jsonBody = payload.toString()
         ) { true }
+    }
+
+    suspend fun resolveBleToken(scannerUserId: String, bleToken: String): Result<NearbyUserCardDto> {
+        val payload = JSONObject().apply {
+            put("scanner_user_id", scannerUserId)
+            put("ble_token", bleToken)
+        }
+        return executeRequest(
+            path = "/api/v1/radar/resolve-ble-token",
+            method = "POST",
+            jsonBody = payload.toString()
+        ) { jsonStr ->
+            val obj = JSONObject(jsonStr)
+            NearbyUserCardDto(
+                userId = obj.getString("user_id"),
+                displayName = obj.getString("display_name"),
+                bio = obj.optString("bio", ""),
+                location = obj.optString("location", ""),
+                avatarUrl = obj.optString("avatar_url").takeIf { it.isNotEmpty() },
+                approxDistanceMeters = obj.optDouble("approx_distance_meters", 0.0),
+                connectionStatus = obj.optString("connection_status", "NONE")
+            )
+        }
     }
 
     suspend fun getNearbyPeers(userId: String): Result<List<NearbyPeerUiModel>> {

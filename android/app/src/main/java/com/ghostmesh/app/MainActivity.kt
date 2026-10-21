@@ -1,6 +1,10 @@
 package com.ghostmesh.app
 
 import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,6 +32,10 @@ import com.ghostmesh.app.data.model.MutualConnection
 import com.ghostmesh.app.data.model.NearbyPeerUiModel
 import com.ghostmesh.app.data.model.ThemePreset
 import com.ghostmesh.app.data.network.SyncApiClient
+import com.ghostmesh.app.proximity.BleDiscoveryManager
+import com.ghostmesh.app.proximity.ConfidenceCategory
+import com.ghostmesh.app.proximity.ProximityEvaluator
+import com.ghostmesh.app.proximity.ProximityTier
 import com.ghostmesh.app.proximity.RadarPowerMode
 import com.ghostmesh.app.proximity.ThermalAndBatteryController
 import com.ghostmesh.app.ui.components.AuraBottomBar
@@ -108,6 +116,79 @@ class MainActivity : ComponentActivity() {
             val apiClient = remember { SyncApiClient() }
             val coroutineScope = rememberCoroutineScope()
 
+            val proximityEvaluator = remember { ProximityEvaluator() }
+            val bleManager = remember {
+                BleDiscoveryManager(this@MainActivity, proximityEvaluator) { observation ->
+                    if (powerMode == RadarPowerMode.OFF || currentUserId.isBlank()) return@BleDiscoveryManager
+                    val rawToken = observation.deviceToken
+                    coroutineScope.launch {
+                        val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
+                        if (resolveRes.isSuccess) {
+                            val peerCard = resolveRes.getOrNull()
+                            if (peerCard != null) {
+                                val distDisplay = when (observation.proximityTier) {
+                                    ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
+                                    ProximityTier.NEARBY -> "Nearby • ~5m"
+                                    ProximityTier.EXTENDED -> "Extended • ~15m"
+                                }
+                                val peerUi = NearbyPeerUiModel(
+                                    encounterId = peerCard.userId,
+                                    displayName = peerCard.displayName,
+                                    introduction = peerCard.bio,
+                                    avatarAsset = peerCard.avatarUrl,
+                                    distanceDisplay = distDisplay,
+                                    isCurrentlyInRange = true,
+                                    confidenceTier = observation.proximityTier
+                                )
+                                val existingIdx = nearbyPeers.indexOfFirst { it.encounterId == peerUi.encounterId }
+                                if (existingIdx >= 0) {
+                                    nearbyPeers[existingIdx] = peerUi
+                                } else {
+                                    nearbyPeers.add(0, peerUi)
+                                }
+                                val discIdx = discoveredPeers.indexOfFirst { it.encounterId == peerUi.encounterId }
+                                if (discIdx >= 0) {
+                                    discoveredPeers[discIdx] = peerUi
+                                } else {
+                                    discoveredPeers.add(0, peerUi)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Real physical GPS location updater
+            fun updatePhysicalLocation() {
+                try {
+                    val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    if (locationManager != null && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        val loc: Location? = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                            ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        loc?.let {
+                            if (currentUserId.isNotBlank()) {
+                                coroutineScope.launch {
+                                    apiClient.pingLocation(currentUserId, it.latitude, it.longitude)
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // Control BLE hardware radio state & GPS ping based on radar powerMode
+            LaunchedEffect(powerMode, currentUserId) {
+                if (currentUserId.isNotBlank()) {
+                    val tokenToAdvertise = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
+                    bleManager.setPowerMode(powerMode, tokenToAdvertise)
+                    if (powerMode != RadarPowerMode.OFF) {
+                        updatePhysicalLocation()
+                    }
+                } else {
+                    bleManager.setPowerMode(RadarPowerMode.OFF, "")
+                }
+            }
+
             // Synchronize with backend API
             fun fetchBackendData() {
                 if (currentUserId.isBlank()) return
@@ -173,6 +254,7 @@ class MainActivity : ComponentActivity() {
                 thermalController.startMonitoring()
                 onDispose {
                     thermalController.stopMonitoring()
+                    bleManager.stopRadar()
                 }
             }
 
@@ -281,7 +363,12 @@ class MainActivity : ComponentActivity() {
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
                                                     if (newMode == RadarPowerMode.OFF) {
+                                                        bleManager.setPowerMode(RadarPowerMode.OFF, "")
                                                         nearbyPeers.clear()
+                                                    } else {
+                                                        val token = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
+                                                        bleManager.setPowerMode(newMode, token)
+                                                        updatePhysicalLocation()
                                                     }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {
@@ -371,7 +458,12 @@ class MainActivity : ComponentActivity() {
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
                                                     if (newMode == RadarPowerMode.OFF) {
+                                                        bleManager.setPowerMode(RadarPowerMode.OFF, "")
                                                         nearbyPeers.clear()
+                                                    } else {
+                                                        val token = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
+                                                        bleManager.setPowerMode(newMode, token)
+                                                        updatePhysicalLocation()
                                                     }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {

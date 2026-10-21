@@ -12,6 +12,7 @@ object UserSession {
     private const val KEY_BIO = "bio"
     private const val KEY_LOCATION = "location"
     private const val KEY_AVATAR = "avatar_uri_or_url"
+    private const val KEY_BLE_TOKEN = "ble_token"
     private const val KEY_IS_REGISTERED = "is_registered"
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -26,7 +27,8 @@ object UserSession {
         instagramUsername: String,
         bio: String,
         location: String,
-        avatar: String?
+        avatar: String?,
+        bleToken: String? = null
     ) {
         getPrefs(context).edit().apply {
             putString(KEY_USER_ID, userId)
@@ -36,6 +38,7 @@ object UserSession {
             putString(KEY_BIO, bio)
             putString(KEY_LOCATION, location)
             putString(KEY_AVATAR, avatar ?: "")
+            putString(KEY_BLE_TOKEN, bleToken ?: userId)
             putBoolean(KEY_IS_REGISTERED, true)
             apply()
         }
@@ -43,6 +46,9 @@ object UserSession {
 
     fun getUserId(context: Context): String? =
         getPrefs(context).getString(KEY_USER_ID, null)
+
+    fun getBleToken(context: Context): String =
+        getPrefs(context).getString(KEY_BLE_TOKEN, null) ?: getUserId(context) ?: ""
 
     fun getDisplayName(context: Context): String =
         getPrefs(context).getString(KEY_DISPLAY_NAME, "") ?: ""
