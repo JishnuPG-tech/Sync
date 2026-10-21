@@ -33,6 +33,7 @@ import com.ghostmesh.app.proximity.ThermalAndBatteryController
 import com.ghostmesh.app.ui.components.AuraBottomBar
 import com.ghostmesh.app.ui.components.AuraTab
 import com.ghostmesh.app.ui.screens.DiscoveredScreen
+import com.ghostmesh.app.ui.screens.InstagramInputScreen
 import com.ghostmesh.app.ui.screens.ProfileScreen
 import com.ghostmesh.app.ui.screens.ProfileSetupScreen
 import com.ghostmesh.app.ui.screens.RadarScreen
@@ -45,6 +46,7 @@ import kotlinx.coroutines.launch
 enum class AppNavState {
     SPLASH,
     WELCOME,
+    INSTAGRAM_INPUT,
     SETUP,
     MAIN
 }
@@ -98,6 +100,7 @@ class MainActivity : ComponentActivity() {
 
             // Real data collections loaded from backend (NO hardcoded fake peers or requests)
             val nearbyPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
+            val discoveredPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
             val requestedPeerIds = remember { mutableStateListOf<String>() }
             val incomingRequests = remember { mutableStateListOf<ConnectionRequestIncoming>() }
             val mutualConnections = remember { mutableStateListOf<MutualConnection>() }
@@ -114,7 +117,18 @@ class MainActivity : ComponentActivity() {
                     if (peersRes.isSuccess) {
                         val peers = peersRes.getOrNull() ?: emptyList()
                         nearbyPeers.clear()
-                        nearbyPeers.addAll(peers)
+                        if (powerMode != RadarPowerMode.OFF) {
+                            nearbyPeers.addAll(peers)
+                        }
+                        // Accumulate into persistent discovered list (never deleted when radar pauses)
+                        peers.forEach { peer ->
+                            val existingIdx = discoveredPeers.indexOfFirst { it.encounterId == peer.encounterId }
+                            if (existingIdx >= 0) {
+                                discoveredPeers[existingIdx] = peer
+                            } else {
+                                discoveredPeers.add(0, peer)
+                            }
+                        }
                     }
 
                     // 2. Fetch pending requests
@@ -135,12 +149,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Periodic sync every 15 seconds when active
-            LaunchedEffect(navState, currentUserId) {
+            // Sync with backend: fetch immediately on launch or powerMode change, poll every 5s when radar active
+            LaunchedEffect(navState, currentUserId, powerMode) {
                 if (navState == AppNavState.MAIN && currentUserId.isNotBlank()) {
-                    while (true) {
+                    fetchBackendData()
+                    while (powerMode != RadarPowerMode.OFF) {
+                        delay(5_000)
                         fetchBackendData()
-                        delay(15_000)
                     }
                 }
             }
@@ -150,6 +165,7 @@ class MainActivity : ComponentActivity() {
                 val thermalController = ThermalAndBatteryController(this@MainActivity) { _, shouldPause ->
                     if (shouldPause) {
                         powerMode = RadarPowerMode.OFF
+                        nearbyPeers.clear()
                     } else if (powerMode == RadarPowerMode.EXTENDED_RANGE) {
                         powerMode = RadarPowerMode.SMART_DISCOVERY
                     }
@@ -164,7 +180,8 @@ class MainActivity : ComponentActivity() {
             BackHandler(enabled = navState != AppNavState.SPLASH) {
                 when (navState) {
                     AppNavState.WELCOME -> finish()
-                    AppNavState.SETUP -> navState = AppNavState.WELCOME
+                    AppNavState.INSTAGRAM_INPUT -> navState = AppNavState.WELCOME
+                    AppNavState.SETUP -> navState = AppNavState.INSTAGRAM_INPUT
                     AppNavState.MAIN -> {
                         if (currentTab != AuraTab.RADAR) {
                             currentTab = AuraTab.RADAR
@@ -190,7 +207,30 @@ class MainActivity : ComponentActivity() {
 
                         AppNavState.WELCOME -> {
                             WelcomeScreen(
-                                onGetStarted = { navState = AppNavState.SETUP }
+                                onGetStarted = { navState = AppNavState.INSTAGRAM_INPUT }
+                            )
+                        }
+
+                        AppNavState.INSTAGRAM_INPUT -> {
+                            InstagramInputScreen(
+                                initialHandle = currentInstagramHandle,
+                                onContinue = { igHandle, igFullName, igAvatar, igBio ->
+                                    currentInstagramHandle = igHandle
+                                    if (!igFullName.isNullOrBlank()) {
+                                        currentDisplayName = igFullName
+                                    }
+                                    currentSyncUsername = igHandle.replace(".", "_")
+                                    if (!igAvatar.isNullOrBlank()) {
+                                        currentAvatarAsset = igAvatar
+                                    }
+                                    if (!igBio.isNullOrBlank()) {
+                                        currentIntro = igBio.take(60)
+                                    }
+                                    navState = AppNavState.SETUP
+                                },
+                                onSkip = {
+                                    navState = AppNavState.SETUP
+                                }
                             )
                         }
 
@@ -210,6 +250,7 @@ class MainActivity : ComponentActivity() {
                                     currentIntro = intro
                                     currentLocation = loc
                                     currentAvatarAsset = avatar
+                                    powerMode = RadarPowerMode.SMART_DISCOVERY
                                     navState = AppNavState.MAIN
                                     fetchBackendData()
                                 }
@@ -239,9 +280,15 @@ class MainActivity : ComponentActivity() {
                                                 powerMode = powerMode,
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
+                                                    if (newMode == RadarPowerMode.OFF) {
+                                                        nearbyPeers.clear()
+                                                    }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {
                                                             apiClient.toggleDiscovery(currentUserId, newMode != RadarPowerMode.OFF)
+                                                            if (newMode != RadarPowerMode.OFF) {
+                                                                fetchBackendData()
+                                                            }
                                                         }
                                                     }
                                                 },
@@ -269,7 +316,7 @@ class MainActivity : ComponentActivity() {
 
                                         AuraTab.DISCOVERED -> {
                                             DiscoveredScreen(
-                                                nearbyPeers = nearbyPeers,
+                                                nearbyPeers = discoveredPeers,
                                                 incomingRequests = incomingRequests,
                                                 requestedPeerIds = requestedPeerIds.toSet(),
                                                 onAcceptRequest = { req ->
@@ -301,6 +348,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 },
                                                 onSkipPeer = { peer ->
+                                                    discoveredPeers.remove(peer)
                                                     nearbyPeers.remove(peer)
                                                 },
                                                 onRefresh = {
@@ -317,14 +365,20 @@ class MainActivity : ComponentActivity() {
                                                 introduction = currentIntro,
                                                 location = currentLocation,
                                                 avatarAsset = currentAvatarAsset,
-                                                encountersCount = nearbyPeers.size,
+                                                encountersCount = discoveredPeers.size,
                                                 connectedCount = mutualConnections.size,
                                                 powerMode = powerMode,
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
+                                                    if (newMode == RadarPowerMode.OFF) {
+                                                        nearbyPeers.clear()
+                                                    }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {
                                                             apiClient.toggleDiscovery(currentUserId, newMode != RadarPowerMode.OFF)
+                                                            if (newMode != RadarPowerMode.OFF) {
+                                                                fetchBackendData()
+                                                            }
                                                         }
                                                     }
                                                 },
@@ -337,7 +391,15 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onRerunOnboarding = {
                                                     UserSession.clear(this@MainActivity)
-                                                    navState = AppNavState.SPLASH
+                                                    currentUserId = ""
+                                                    currentDisplayName = ""
+                                                    currentSyncUsername = ""
+                                                    currentInstagramHandle = ""
+                                                    currentIntro = ""
+                                                    currentAvatarAsset = null
+                                                    nearbyPeers.clear()
+                                                    discoveredPeers.clear()
+                                                    navState = AppNavState.INSTAGRAM_INPUT
                                                 }
                                             )
                                         }

@@ -36,12 +36,12 @@ data class NearbyPeerUiModel(
     val displayName: String,
     val age: Int = 21,
     val introduction: String? = null,
-    val interests: List<String> = listOf("Tech", "Music", "Design"),
+    val interests: List<String> = emptyList(),
     val confidenceTier: ConfidenceCategory = ConfidenceCategory.NEARBY,
     val isCurrentlyInRange: Boolean = true,
     val discoveredTimeAgo: String = "Just now",
     val avatarColorIndex: Int = 0,
-    val avatarAsset: String = "portrait_02.jpg",
+    val avatarAsset: String? = null,
     val distanceDisplay: String = "14m",
     val lastSeenElapsedMs: Long = 0L,
     val connectionState: String = "NONE" // "NONE", "PENDING_SENT", "CONNECTED"
@@ -56,9 +56,9 @@ data class ConnectionRequestIncoming(
     val sender_display_name: String,
     val sender_age: Int = 22,
     val sender_introduction: String? = null,
-    val sender_interests: List<String> = listOf("Design", "Photography"),
+    val sender_interests: List<String> = emptyList(),
     val sender_avatar_index: Int = 0,
-    val sender_avatar_asset: String = "portrait_02.jpg",
+    val sender_avatar_asset: String? = null,
     val status: String = "PENDING",
     val created_at: String = "Just now"
 )
@@ -78,7 +78,7 @@ data class MutualConnection(
     val age: Int = 22,
     val instagram_username: String, // UNLOCKED UPON MUTUAL ACCEPT ONLY!
     val introduction: String? = null,
-    val interests: List<String> = listOf("Music", "Travel", "Coffee"),
+    val interests: List<String> = emptyList(),
     val avatar_index: Int = 0,
     val connected_at: String? = "Just now"
 )

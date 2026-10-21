@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,45 +26,55 @@ import androidx.compose.ui.unit.sp
 import com.ghostmesh.app.data.network.SyncApiConfig
 import com.ghostmesh.app.ui.theme.AuraTheme
 import com.ghostmesh.app.ui.theme.DmSansFontFamily
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 
 @Composable
 fun rememberPortraitBitmap(assetName: String?): ImageBitmap? {
     if (assetName.isNullOrEmpty()) return null
     val context = LocalContext.current
-    return remember(assetName) {
-        try {
-            when {
-                // Content URI from system photo picker
-                assetName.startsWith("content://") || assetName.startsWith("file://") -> {
-                    context.contentResolver.openInputStream(Uri.parse(assetName))?.use { stream ->
-                        BitmapFactory.decodeStream(stream)?.asImageBitmap()
+    return produceState<ImageBitmap?>(initialValue = null, key1 = assetName) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                when {
+                    // Content URI from system photo picker
+                    assetName.startsWith("content://") || assetName.startsWith("file://") -> {
+                        context.contentResolver.openInputStream(Uri.parse(assetName))?.use { stream ->
+                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                        }
+                    }
+                    // Direct absolute file path
+                    File(assetName).exists() -> {
+                        BitmapFactory.decodeFile(assetName)?.asImageBitmap()
+                    }
+                    // Server static photo path or remote Instagram CDN URL
+                    assetName.startsWith("/static/") || assetName.startsWith("http://") || assetName.startsWith("https://") -> {
+                        val fullUrl = if (assetName.startsWith("/static/")) "${SyncApiConfig.activeBaseUrl}$assetName" else assetName
+                        val conn = (URL(fullUrl).openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 8000
+                            readTimeout = 8000
+                            setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+                        }
+                        conn.inputStream.use { stream ->
+                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                        }
+                    }
+                    // Local asset name
+                    else -> {
+                        val cleanName = if (assetName.startsWith("portraits/")) assetName else "portraits/$assetName"
+                        context.assets.open(cleanName).use { stream ->
+                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                        }
                     }
                 }
-                // Direct absolute file path
-                File(assetName).exists() -> {
-                    BitmapFactory.decodeFile(assetName)?.asImageBitmap()
-                }
-                // Server static photo path
-                assetName.startsWith("/static/") || assetName.startsWith("http://") || assetName.startsWith("https://") -> {
-                    val fullUrl = if (assetName.startsWith("/static/")) "${SyncApiConfig.activeBaseUrl}$assetName" else assetName
-                    URL(fullUrl).openStream().use { stream ->
-                        BitmapFactory.decodeStream(stream)?.asImageBitmap()
-                    }
-                }
-                // Local asset name
-                else -> {
-                    val cleanName = if (assetName.startsWith("portraits/")) assetName else "portraits/$assetName"
-                    context.assets.open(cleanName).use { stream ->
-                        BitmapFactory.decodeStream(stream)?.asImageBitmap()
-                    }
-                }
+            } catch (e: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            null
         }
-    }
+    }.value
 }
 
 /**

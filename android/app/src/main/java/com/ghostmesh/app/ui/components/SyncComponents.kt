@@ -122,8 +122,8 @@ fun SyncTopBar(
 fun SyncConnectionCelebrationDialog(
     matchedName: String,
     instagramHandle: String,
-    myAvatarAsset: String = "portrait_05.jpg",
-    peerAvatarAsset: String = "portrait_02.jpg",
+    myAvatarAsset: String? = null,
+    peerAvatarAsset: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current

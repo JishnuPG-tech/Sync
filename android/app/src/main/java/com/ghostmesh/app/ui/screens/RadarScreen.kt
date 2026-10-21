@@ -88,7 +88,7 @@ fun RadarScreen(
     modifier: Modifier = Modifier
 ) {
     val isDiscoveryActive = powerMode != RadarPowerMode.OFF
-    val activeInRadarPeers = nearbyPeers.filter { it.isCurrentlyInRange }
+    val activeInRadarPeers = if (isDiscoveryActive) nearbyPeers.filter { it.isCurrentlyInRange } else emptyList()
 
     Column(
         modifier = modifier
@@ -237,7 +237,9 @@ fun RadarScreen(
 
                         Spacer(modifier = Modifier.height(3.dp))
 
-                        val summarySub = if (activeInRadarPeers.isEmpty()) {
+                        val summarySub = if (!isDiscoveryActive) {
+                            "Switch to Smart or Extended to discover nearby people"
+                        } else if (activeInRadarPeers.isEmpty()) {
                             "Profiles appear only when a device is detected nearby"
                         } else {
                             "Profiles persist in your feed even when out of range"
@@ -326,7 +328,7 @@ fun RadarScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             Text(
-                                text = "Looking for nearby Sync peers",
+                                text = if (!isDiscoveryActive) "Radar is paused" else "Looking for nearby Sync peers",
                                 fontFamily = PlayfairFontFamily,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 16.5.sp,
@@ -337,7 +339,10 @@ fun RadarScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "Profiles only appear when another Sync user enters your physical proximity. Bluetooth LE scanning active.",
+                                text = if (!isDiscoveryActive) 
+                                    "Turn on Smart Discovery or Extended Range to scan for nearby devices."
+                                else 
+                                    "Profiles only appear when another Sync user enters your physical proximity. Bluetooth LE scanning active.",
                                 fontFamily = DmSansFontFamily,
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,
@@ -349,7 +354,7 @@ fun RadarScreen(
                             Spacer(modifier = Modifier.height(18.dp))
 
                             Button(
-                                onClick = onRefreshPeers,
+                                onClick = if (!isDiscoveryActive) { { onPowerModeChanged(RadarPowerMode.SMART_DISCOVERY) } } else onRefreshPeers,
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AuraTheme.colors.accent,
@@ -361,13 +366,13 @@ fun RadarScreen(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Outlined.Sync,
+                                        imageVector = if (!isDiscoveryActive) Icons.Outlined.Sensors else Icons.Outlined.Sync,
                                         contentDescription = null,
                                         modifier = Modifier.size(15.dp),
                                         tint = Color.White
                                     )
                                     Text(
-                                        text = "Scan & Refresh Radar",
+                                        text = if (!isDiscoveryActive) "Turn on Radar" else "Scan & Refresh Radar",
                                         fontFamily = DmSansFontFamily,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 12.5.sp

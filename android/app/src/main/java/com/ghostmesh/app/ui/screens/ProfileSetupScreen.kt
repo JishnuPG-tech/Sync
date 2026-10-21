@@ -95,17 +95,17 @@ fun ProfileSetupScreen(
     val coroutineScope = rememberCoroutineScope()
     val apiClient = remember { SyncApiClient() }
 
-    // Form states - starting empty or from existing session
-    var displayName by remember { mutableStateOf(initialDisplayName) }
-    var syncUsername by remember { mutableStateOf(initialSyncUsername) }
-    var instagramHandle by remember { mutableStateOf(initialInstagramHandle) }
-    var bio by remember { mutableStateOf(initialBio) }
-    var locationInput by remember { mutableStateOf(initialLocation) }
+    // Form states - starting from extracted Instagram profile or existing session
+    var displayName by remember(initialDisplayName) { mutableStateOf(initialDisplayName) }
+    var syncUsername by remember(initialSyncUsername) { mutableStateOf(initialSyncUsername) }
+    var instagramHandle by remember(initialInstagramHandle) { mutableStateOf(initialInstagramHandle) }
+    var bio by remember(initialBio) { mutableStateOf(initialBio) }
+    var locationInput by remember(initialLocation) { mutableStateOf(initialLocation) }
     var showMapDialog by remember { mutableStateOf(false) }
 
     // Profile photo upload states
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    var uploadedPhotoUrl by remember { mutableStateOf(initialAvatar) }
+    var uploadedPhotoUrl by remember(initialAvatar) { mutableStateOf(initialAvatar) }
     var isUploadingPhoto by remember { mutableStateOf(false) }
 
     // System gallery picker contract
@@ -135,12 +135,12 @@ fun ProfileSetupScreen(
 
     // Instagram verification state
     var isVerifyingInstagram by remember { mutableStateOf(false) }
-    var isInstagramVerified by remember { mutableStateOf(initialInstagramHandle.isNotEmpty()) }
+    var isInstagramVerified by remember(initialInstagramHandle) { mutableStateOf(initialInstagramHandle.isNotEmpty()) }
     var instagramVerificationError by remember { mutableStateOf<String?>(null) }
     // Fetched Instagram profile data (from real API)
-    var instagramAvatarUrl by remember { mutableStateOf<String?>(null) }
-    var instagramFullName by remember { mutableStateOf<String?>(null) }
-    var instagramBio by remember { mutableStateOf<String?>(null) }
+    var instagramAvatarUrl by remember(initialAvatar) { mutableStateOf(initialAvatar) }
+    var instagramFullName by remember(initialDisplayName) { mutableStateOf(initialDisplayName.takeIf { it.isNotEmpty() }) }
+    var instagramBio by remember(initialBio) { mutableStateOf(initialBio.takeIf { it.isNotEmpty() }) }
 
     // Registration submission state
     var isSubmitting by remember { mutableStateOf(false) }
