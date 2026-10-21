@@ -57,7 +57,8 @@ def get_user_by_instagram(instagram_username: str) -> Optional[Dict[str, Any]]:
 
 def get_user_by_ble_token(ble_token: str) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
-    res = supabase.table("users").select("*").eq("ble_token", ble_token.strip()).limit(1).execute()
+    clean = ble_token.strip()
+    res = supabase.table("users").select("*").or_(f"ble_token.eq.{clean},id.eq.{clean}").limit(1).execute()
     return res.data[0] if res.data else None
 
 def update_user_discovery(user_id: str, is_active: bool) -> Optional[Dict[str, Any]]:
@@ -130,19 +131,25 @@ def get_nearby_active_users(
         conn_status = get_connection_status(current_user_id, user["id"])
         interests = [i.strip() for i in user.get("interests_csv", "").split(",") if i.strip()]
 
-        dist = 0.0
-        if curr_loc:
-            # Check partner's location
-            partner_loc_res = supabase.table("user_locations").select("*").eq("user_id", user["id"]).limit(1).execute()
-            if partner_loc_res.data:
-                partner_loc = partner_loc_res.data[0]
-                dist = haversine_distance_meters(
-                    curr_loc["latitude"], curr_loc["longitude"],
-                    partner_loc["latitude"], partner_loc["longitude"]
-                )
-                if dist > max_distance_meters:
-                    continue
-                dist = round(dist, 1)
+        if not curr_loc:
+            # Current user has no GPS ping recorded — proximity requires physical location
+            continue
+
+        # Check partner's location
+        partner_loc_res = supabase.table("user_locations").select("*").eq("user_id", user["id"]).limit(1).execute()
+        if not partner_loc_res.data:
+            # Partner has no GPS ping recorded — skip so we only show real physical peers
+            continue
+
+        partner_loc = partner_loc_res.data[0]
+        dist = haversine_distance_meters(
+            curr_loc["latitude"], curr_loc["longitude"],
+            partner_loc["latitude"], partner_loc["longitude"]
+        )
+        if dist > max_distance_meters:
+            # Outside physical proximity radius — skip!
+            continue
+        dist = round(dist, 1)
 
         nearby_cards.append(
             NearbyUserCard(
