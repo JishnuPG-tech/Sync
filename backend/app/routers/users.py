@@ -12,6 +12,7 @@ from app.schemas import (
 )
 from app.services.instagram import verify_instagram_profile
 from app.services.storage import upload_photo_to_supabase, is_supabase_configured
+from app.supabase_client import get_supabase
 from app import crud
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -85,13 +86,25 @@ async def verify_instagram_handle(username: str):
 
 @router.post("/register", response_model=UserPrivateProfile, status_code=status.HTTP_201_CREATED)
 def register_user(user_in: UserCreate):
-    """Registers user directly into Supabase."""
+    """Registers user or logs in existing user directly in Supabase."""
     existing = crud.get_user_by_instagram(user_in.instagram_username)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Instagram handle is already registered"
-        )
+        # Existing user logging back in: update profile fields and ensure discovery is active
+        supabase = get_supabase()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        update_data = {
+            "display_name": user_in.display_name.strip(),
+            "sync_username": user_in.sync_username.strip().lower(),
+            "bio": user_in.bio.strip() if user_in.bio else "",
+            "location_name": user_in.location.strip() if user_in.location else "",
+            "avatar_url": user_in.avatar_url,
+            "is_discovery_active": True,
+            "updated_at": now_iso
+        }
+        res = supabase.table("users").update(update_data).eq("id", existing["id"]).execute()
+        updated = res.data[0] if res.data else existing
+        return _dict_to_profile(updated)
+
     user = crud.create_user(user_in)
     return _dict_to_profile(user)
 
