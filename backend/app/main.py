@@ -33,6 +33,15 @@ app.include_router(users.router, prefix=settings.API_V1_STR)
 app.include_router(radar.router, prefix=settings.API_V1_STR)
 app.include_router(connections.router, prefix=settings.API_V1_STR)
 
+@app.get("/", tags=["Root"])
+def root():
+    return {
+        "status": "online",
+        "service": settings.PROJECT_NAME,
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health", tags=["Health"])
 def health_check():
     return {

@@ -29,9 +29,8 @@ data class InstagramVerificationResult(
 typealias bool_val = Boolean
 
 object SyncApiConfig {
-    // Production URL on Render — set this after deploying to Render
-    // e.g. "https://sync-api.onrender.com"
-    const val RENDER_URL: String = ""   // ← Paste your Render URL here after deploy
+    // Production URL on Render
+    const val RENDER_URL: String = "https://sync-enoc.onrender.com"
 
     // Local dev fallbacks
     // 127.0.0.1:8000 works with `adb reverse tcp:8000 tcp:8000`
@@ -42,7 +41,7 @@ object SyncApiConfig {
         add("http://10.0.2.2:8000")
         add("http://10.41.89.246:8000")
     }
-    var activeBaseUrl: String = if (RENDER_URL.isNotBlank()) RENDER_URL else "http://127.0.0.1:8000"
+    var activeBaseUrl: String = RENDER_URL
 }
 
 class SyncApiClient {
