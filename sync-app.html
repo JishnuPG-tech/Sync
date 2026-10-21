@@ -1,0 +1,3779 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Sync — Private Proximity Network</title>
+  
+  <!-- Exact Typography from Specification -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ========================================================
+       DESIGN TOKENS (Light: Warm Paper / Dark: Obsidian)
+       ======================================================== */
+    :root {
+      --sans: "DM Sans", system-ui, -apple-system, sans-serif;
+      --serif: "Playfair Display", Georgia, serif;
+      --mono: "DM Mono", ui-monospace, monospace;
+
+      /* Light Theme (Claude Warm Paper & Terracotta) */
+      --bg: #f5f2eb;
+      --surface: #fbfaf6;
+      --surface2: #eeeae1;
+      --text: #151513;
+      --muted: #6f6d66;
+      --faint: #9b988f;
+      --line: #d9d5cc;
+      --accent: #cf7052;
+      --accent2: #9f4e37;
+      --accent-subtle: rgba(207, 112, 82, 0.12);
+      --green: #6b8c72;
+      --green-subtle: rgba(107, 140, 114, 0.14);
+      --red: #c05252;
+      --red-subtle: rgba(192, 82, 82, 0.12);
+
+      --shadow-sm: 0 1px 4px rgba(21, 21, 19, 0.05);
+      --shadow-md: 0 6px 18px rgba(21, 21, 19, 0.07);
+      --shadow-lg: 0 16px 36px rgba(21, 21, 19, 0.12);
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 22px;
+      --radius-full: 9999px;
+
+      /* Universal Physical Device Dimensions (16.74 cm / 6.6-inch modern display, 19.5:9 aspect) */
+      --phone-w: 395px;
+      /* Exact Virtual Device Screen Size (1080 x 2412 px / 412 x 920 dp, 20.1:9 Aspect Ratio) */
+      --phone-w: 412px;
+      --phone-max-w: 412px;
+      --phone-h: min(920px, 94vh);
+    }
+
+    [data-theme="dark"] {
+      /* Dark Theme (Obsidian & Terracotta) */
+      --bg: #0b0c0b;
+      --surface: #111311;
+      --surface2: #171a17;
+      --text: #f3f0e9;
+      --muted: #9b9b94;
+      --faint: #666963;
+      --line: #292c28;
+      --accent: #e18462;
+      --accent2: #f0a083;
+      --accent-subtle: rgba(225, 132, 98, 0.16);
+      --green: #8bad91;
+      --green-subtle: rgba(139, 173, 145, 0.16);
+      --red: #e06d6d;
+      --red-subtle: rgba(224, 109, 109, 0.16);
+
+      --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+      --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.6);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: #18191c;
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 16px 12px;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(207, 112, 82, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(107, 140, 114, 0.07) 0%, transparent 45%);
+    }
+
+    /* ========================================================
+       COMPANION CONTROLLER BAR (DESKTOP)
+       ======================================================== */
+    .companion-toolbar {
+      width: 100%;
+      max-width: var(--phone-max-w);
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #f3f0e9;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 200;
+    }
+
+    .brand-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-badge {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-badge span {
+      color: #e18462;
+      font-style: italic;
+    }
+
+    .tag-prototype {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(225, 132, 98, 0.2);
+      color: #e18462;
+      border: 1px solid rgba(225, 132, 98, 0.4);
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      width: 100%;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .tool-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f3f0e9;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+
+    /* ========================================================
+       PHONE STAGE & UNIVERSAL MOBILE CONTAINER
+       ======================================================== */
+    .phone-stage {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+    }
+
+    .phone-frame {
+      width: 100%;
+      max-width: var(--phone-max-w);
+      height: var(--phone-h);
+      background: var(--bg);
+      border-radius: 44px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 0 0 10px #27282e,
+        0 0 0 12px rgba(255, 255, 255, 0.12),
+        0 24px 60px rgba(0, 0, 0, 0.55);
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    /* AUTOMATIC NATIVE ADAPTATION ON ACTUAL MOBILE DEVICES (< 600px) */
+    @media (max-width: 600px) {
+      body {
+        padding: 0;
+        background: var(--bg);
+      }
+      .companion-toolbar {
+        display: none; /* Hide toolbar on actual mobile for 100% native feel */
+      }
+      .phone-stage {
+        height: 100dvh;
+      }
+      .phone-frame {
+        max-width: 100vw;
+        height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .phone-notch {
+        display: none; /* Let native phone camera cutout take over */
+      }
+    }
+
+    /* HARDWARE NOTCH / DYNAMIC ISLAND */
+    .phone-notch {
+      position: absolute;
+      top: 9px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 96px;
+      height: 24px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 120;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      pointer-events: none;
+    }
+
+    .notch-camera {
+      width: 8px;
+      height: 8px;
+      background: #111;
+      border: 1.5px solid #222;
+      border-radius: 50%;
+    }
+
+    .notch-sensor {
+      width: 5px;
+      height: 5px;
+      background: #161616;
+      border-radius: 50%;
+    }
+
+    /* STATUS BAR */
+    .phone-status-bar {
+      height: 42px;
+      padding: 10px 20px 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      z-index: 110;
+      flex-shrink: 0;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    /* HOME INDICATOR */
+    .home-indicator-bar {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 4px;
+      background: var(--text);
+      opacity: 0.3;
+      border-radius: var(--radius-full);
+      z-index: 150;
+      pointer-events: none;
+    }
+
+    /* ========================================================
+       APP VIEWPORT & SCREEN STACK
+       ======================================================== */
+    .app-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen-view {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.985) translateY(6px);
+      transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .screen-view.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1) translateY(0);
+      z-index: 10;
+    }
+
+    /* ========================================================
+       SCREEN 1: SPLASH & BRAND LOGO
+       ======================================================== */
+    #screen-splash {
+      justify-content: center;
+      align-items: center;
+      padding: 32px 20px;
+      text-align: center;
+    }
+
+    .splash-logo-wrap {
+      width: 110px;
+      height: 110px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sync-rings-icon {
+      width: 100%;
+      height: 100%;
+      animation: pulseRings 3s ease-in-out infinite;
+    }
+
+    @keyframes pulseRings {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 10px rgba(207,112,82,0.18)); }
+      50% { transform: scale(1.05); filter: drop-shadow(0 8px 20px rgba(207,112,82,0.38)); }
+    }
+
+    .splash-title {
+      font-family: var(--serif);
+      font-size: 42px;
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .splash-title span {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .splash-tagline {
+      font-family: var(--sans);
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 32px;
+    }
+
+    .splash-loader-bar {
+      width: 140px;
+      height: 3px;
+      background: var(--line);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .splash-loader-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: var(--radius-full);
+      animation: loadBar 2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    }
+
+    @keyframes loadBar {
+      0% { width: 0%; }
+      60% { width: 80%; }
+      100% { width: 100%; }
+    }
+
+    /* ========================================================
+       SCREEN 2: WELCOME CAROUSEL
+       ======================================================== */
+    #screen-welcome {
+      padding: 12px 20px 24px 20px;
+      justify-content: space-between;
+    }
+
+    .welcome-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+    }
+
+    .mini-logo-lockup {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .mini-brand-name {
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .welcome-skip {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 6px 8px;
+    }
+
+    .welcome-carousel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      padding: 8px 0;
+    }
+
+    .welcome-slide {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      animation: fadeInSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .welcome-slide.active {
+      display: flex;
+    }
+
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .welcome-hero-art {
+      width: 220px;
+      height: 220px;
+      position: relative;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .radar-circle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px solid var(--line);
+    }
+
+    .radar-circle.c1 { width: 66px; height: 66px; border-color: rgba(207, 112, 82, 0.4); background: var(--accent-subtle); }
+    .radar-circle.c2 { width: 136px; height: 136px; }
+    .radar-circle.c3 { width: 210px; height: 210px; }
+
+    .orbit-avatar {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      object-fit: cover;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+      animation: floatNode 3.5s ease-in-out infinite alternate;
+    }
+
+    .orbit-avatar.p1 { top: 12px; left: 26px; animation-delay: 0s; }
+    .orbit-avatar.p2 { top: 20px; right: 24px; animation-delay: 1.2s; }
+    .orbit-avatar.p3 { bottom: 18px; left: 32px; animation-delay: 2s; }
+    .orbit-avatar.p4 { bottom: 22px; right: 28px; animation-delay: 0.7s; }
+
+    .center-target {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 0 0 5px var(--accent-subtle);
+    }
+
+    @keyframes floatNode {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-6px); }
+    }
+
+    .welcome-title {
+      font-family: var(--serif);
+      font-size: 28px;
+      font-weight: 500;
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .welcome-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .welcome-desc {
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--muted);
+      max-width: 280px;
+    }
+
+    .welcome-indicators {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+
+    .carousel-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: var(--radius-full);
+      background: var(--line);
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .carousel-dot.active {
+      width: 20px;
+      background: var(--accent);
+    }
+
+    .welcome-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    /* ========================================================
+       SCREEN 3: PROFILE SETUP & DOUBLE VALIDATION
+       ======================================================== */
+    #screen-setup {
+      padding: 14px 18px 24px 18px;
+    }
+
+    .screen-header-block {
+      margin-bottom: 14px;
+    }
+
+    .screen-headline {
+      font-family: var(--serif);
+      font-size: 27px;
+      font-weight: 500;
+      letter-spacing: -0.035em;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .screen-subline {
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .avatar-picker-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 10px 0 18px 0;
+    }
+
+    .avatar-preview-wrap {
+      position: relative;
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      border: 2.5px solid var(--accent);
+      padding: 2.5px;
+      background: var(--surface);
+      cursor: pointer;
+    }
+
+    .avatar-preview-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .avatar-badge-edit {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--bg);
+    }
+
+    .avatar-picker-presets {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .avatar-thumb-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      padding: 1px;
+      cursor: pointer;
+      background: var(--surface2);
+      transition: all 0.2s ease;
+    }
+
+    .avatar-thumb-btn.selected {
+      border-color: var(--accent);
+      transform: scale(1.1);
+    }
+
+    .avatar-thumb-btn img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    /* FORM GROUPS */
+    .form-group {
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .form-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .form-label-opt {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--faint);
+      font-weight: normal;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--muted);
+      pointer-events: none;
+      display: flex;
+    }
+
+    .app-input {
+      width: 100%;
+      height: 46px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 0 14px 0 40px;
+      font-family: var(--sans);
+      font-size: 13.5px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .app-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+
+    .app-input.error {
+      border-color: var(--red);
+      background: var(--red-subtle);
+    }
+
+    .input-status-icon {
+      position: absolute;
+      right: 12px;
+      display: flex;
+    }
+
+    .validation-hint {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      margin-top: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+    }
+
+    .validation-hint.valid { color: var(--green); }
+    .validation-hint.invalid { color: var(--red); }
+
+    .char-counter {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--faint);
+      text-align: right;
+      margin-top: 3px;
+    }
+
+    /* DOUBLE VALIDATION CARD */
+    .ig-validation-card {
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .ig-val-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ig-avatar-mini {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .ig-val-info h5 {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .ig-val-info p {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--muted);
+    }
+
+    .btn-verify-chip {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 5px 11px;
+      border-radius: var(--radius-full);
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-verify-chip.verified {
+      background: var(--green);
+    }
+
+    /* GUARANTEE BOX */
+    .privacy-guarantee-box {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin: 16px 0;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .guarantee-icon {
+      color: var(--green);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .guarantee-text h4 {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .guarantee-text p {
+      font-family: var(--sans);
+      font-size: 11.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    /* BUTTONS */
+    .btn-primary {
+      width: 100%;
+      height: 48px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--sans);
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent2);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      height: 44px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      font-family: var(--sans);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface2);
+    }
+
+    /* ========================================================
+       MAIN APP SHELL (Top Bar, Content, Bottom Nav)
+       ======================================================== */
+    .app-main-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: relative;
+    }
+
+    .app-topbar {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+      flex-shrink: 0;
+      z-index: 30;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-wordmark {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.04em;
+    }
+
+    .radar-beacon-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--green-subtle);
+      border: 1px solid rgba(107, 140, 114, 0.35);
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-full);
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulseGreen 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.6); opacity: 0.5; }
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    /* SCREEN MAIN: Lock viewport so only tab content scrolls */
+    #screen-main {
+      overflow: hidden !important;
+    }
+
+    .app-main-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* SCROLLABLE MAIN BODY */
+    .tab-content-container {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 20px;
+    }
+
+    /* BOTTOM NAVIGATION BAR (Permanently Docked, Zero Shift) */
+    .app-bottom-nav {
+      flex: 0 0 60px;
+      height: 60px;
+      position: relative;
+      bottom: auto;
+      left: auto;
+      right: auto;
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 8px 4px 8px;
+      z-index: 50;
+      box-shadow: 0 -3px 12px rgba(0,0,0,0.04);
+    }
+
+    .nav-tab-item {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .nav-tab-item.active {
+      color: var(--accent);
+    }
+
+    .nav-tab-icon {
+      display: flex;
+      position: relative;
+    }
+
+    .nav-tab-badge {
+      position: absolute;
+      top: -3px;
+      right: -8px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1.5px solid var(--surface);
+    }
+
+    .nav-tab-label {
+      font-family: var(--sans);
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    /* ========================================================
+       TAB 1: RADAR (HOME)
+       ======================================================== */
+    #tab-radar {
+      padding: 14px 16px;
+    }
+
+    /* POWER MODE SELECTOR */
+    .power-mode-selector {
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 3px;
+      margin-bottom: 14px;
+      gap: 3px;
+    }
+
+    .mode-chip {
+      flex: 1;
+      height: 32px;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .mode-chip.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(207, 112, 82, 0.3);
+    }
+
+    /* RADAR VIEWPORT & PINS */
+    .radar-card-container {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .radar-viewport {
+      width: 220px;
+      height: 220px;
+      position: relative;
+      margin: 6px 0;
+    }
+
+    .radar-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px dashed var(--line);
+      pointer-events: none;
+    }
+
+    .radar-ring.r1 { width: 70px; height: 70px; border-style: solid; border-color: rgba(207, 112, 82, 0.25); }
+    .radar-ring.r2 { width: 140px; height: 140px; border-color: rgba(207, 112, 82, 0.2); }
+    .radar-ring.r3 { width: 210px; height: 210px; border-color: rgba(207, 112, 82, 0.15); }
+
+    .radar-sweep-beam {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, transparent 0deg, transparent 310deg, rgba(207, 112, 82, 0.22) 360deg);
+      animation: rotateRadar 5s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes rotateRadar {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .radar-center-avatar {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      background: var(--surface);
+      overflow: hidden;
+      z-index: 10;
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+
+    .radar-center-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .radar-peer-pin {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      background: var(--surface);
+      cursor: pointer;
+      z-index: 12;
+      overflow: hidden;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.18);
+      transition: all 0.25s ease;
+      animation: peerPing 3s ease-in-out infinite alternate;
+    }
+
+    .radar-peer-pin:hover {
+      transform: scale(1.15);
+      border-color: #fff;
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    .radar-peer-pin img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .radar-peer-pin.pin-1 { top: 18px; right: 34px; animation-delay: 0.2s; }
+    .radar-peer-pin.pin-2 { bottom: 26px; left: 26px; animation-delay: 1.5s; }
+    .radar-peer-pin.pin-3 { top: 62px; left: 14px; animation-delay: 0.8s; }
+    .radar-peer-pin.pin-4 { bottom: 32px; right: 38px; animation-delay: 2.2s; }
+
+    @keyframes peerPing {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-4px); }
+    }
+
+    .radar-summary-text {
+      font-family: var(--serif);
+      font-size: 19px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin-top: 4px;
+    }
+
+    .radar-subcaption {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 2px;
+      text-align: center;
+    }
+
+    /* SECTION TITLES */
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .section-title-h3 {
+      font-family: var(--serif);
+      font-size: 19px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .count-chip {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      padding: 2px 7px;
+      border-radius: var(--radius-full);
+      color: var(--muted);
+    }
+
+    /* PEER CARDS */
+    .peer-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .peer-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.25s ease;
+    }
+
+    .peer-card:hover {
+      border-color: var(--accent);
+    }
+
+    .peer-card.removed {
+      display: none !important;
+    }
+
+    .peer-top-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .peer-avatar-wrap {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .peer-avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .peer-online-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--green);
+      border: 2px solid var(--surface);
+    }
+
+    .peer-online-dot.offline {
+      background: var(--faint);
+    }
+
+    .peer-info-col {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .peer-name-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .peer-name {
+      font-family: var(--sans);
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .peer-distance-badge {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .badge-close { background: var(--green-subtle); color: var(--green); border: 1px solid rgba(107, 140, 114, 0.3); }
+    .badge-nearby { background: var(--accent-subtle); color: var(--accent); border: 1px solid rgba(207, 112, 82, 0.3); }
+    .badge-extended { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+
+    .peer-privacy-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .peer-bio-text {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .peer-tags-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 4px;
+    }
+
+    .peer-tag {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      padding: 1px 7px;
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+    }
+
+    /* CARD ACTION BUTTONS */
+    .peer-action-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-card-skip {
+      flex: 1;
+      height: 36px;
+      background: var(--surface2);
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-card-skip:hover {
+      background: var(--red-subtle);
+      color: var(--red);
+      border-color: var(--red);
+    }
+
+    .btn-card-connect {
+      flex: 1.3;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-card-connect:hover {
+      background: var(--accent2);
+    }
+
+    .btn-card-connect.sent {
+      background: var(--green);
+      pointer-events: none;
+    }
+
+    /* ========================================================
+       TAB 2: DISCOVERED LIST
+       ======================================================== */
+    #tab-discovered {
+      padding: 14px 16px;
+    }
+
+    .search-filter-box {
+      margin-bottom: 12px;
+    }
+
+    .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .filter-pills-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+    }
+
+    .filter-pills-row::-webkit-scrollbar { display: none; }
+
+    .filter-pill {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      padding: 5px 11px;
+      border-radius: var(--radius-full);
+      font-family: var(--sans);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .filter-pill.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent2);
+    }
+
+    /* INCOMING REQUEST HERO CARD */
+    .incoming-request-card {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+      border: 1.5px solid var(--accent);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 14px rgba(207, 112, 82, 0.1);
+    }
+
+    .incoming-badge-title {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .incoming-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-accept {
+      flex: 1;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-decline {
+      flex: 1;
+      height: 36px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* ========================================================
+       TAB 3: PROFILE & SETTINGS
+       ======================================================== */
+    #tab-profile {
+      padding: 14px 16px 20px 16px;
+    }
+
+    .profile-hero-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 18px 16px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 16px;
+    }
+
+    .my-avatar-large {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: 2.5px solid var(--accent);
+      margin: 0 auto 10px auto;
+      object-fit: cover;
+    }
+
+    .my-profile-name {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .my-profile-handle {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .my-profile-bio {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    .profile-stats-row {
+      display: flex;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 10px;
+    }
+
+    .stat-box {
+      flex: 1;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .stat-lbl {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .settings-group-title {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--faint);
+      margin: 14px 0 6px 4px;
+    }
+
+    .settings-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+
+    .settings-left-info h4 {
+      font-family: var(--sans);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1px;
+    }
+
+    .settings-left-info p {
+      font-family: var(--sans);
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    /* TOGGLE SWITCH */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--line);
+      border-radius: var(--radius-full);
+      transition: .25s;
+    }
+
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: .25s;
+    }
+
+    input:checked + .slider-toggle {
+      background-color: var(--accent);
+    }
+
+    input:checked + .slider-toggle:before {
+      transform: translateX(18px);
+    }
+
+    /* ========================================================
+       MODALS: PERSON PREVIEW & MUTUAL CELEBRATION (NO HEART)
+       ======================================================== */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-sheet {
+      width: 100%;
+      background: var(--surface);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 18px 20px 38px 20px;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 88%;
+      overflow-y: auto;
+      border-top: 1px solid var(--line);
+      box-sizing: border-box;
+    }
+
+    .modal-overlay.active .modal-sheet {
+      transform: translateY(0);
+    }
+
+    .sheet-drag-handle {
+      width: 32px;
+      height: 4px;
+      background: var(--line);
+      border-radius: var(--radius-full);
+      margin: 0 auto 14px auto;
+    }
+
+    .preview-modal-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2.5px solid var(--accent);
+      object-fit: cover;
+      margin: 0 auto 10px auto;
+      display: block;
+    }
+
+    .preview-modal-title {
+      font-family: var(--serif);
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text);
+    }
+
+    .locked-instagram-box {
+      background: var(--surface2);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      margin: 14px 0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .locked-instagram-box svg {
+      color: var(--accent);
+    }
+
+    .locked-instagram-box h4 {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: var(--text);
+    }
+
+    .locked-instagram-box p {
+      font-family: var(--sans);
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    /* S17 MUTUAL CONNECTION MODAL - WITH SYNC ICON (NO HEART) */
+    .celebration-wrap {
+      text-align: center;
+      padding: 6px 0;
+    }
+
+    .celebration-avatars {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .cel-avatar {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      border: 2.5px solid var(--accent);
+      object-fit: cover;
+    }
+
+    /* CENTER SYNC BADGE (Replaces Love / Heart symbol) */
+    .cel-sync-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 -10px;
+      z-index: 5;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      border: 2px solid var(--surface);
+    }
+
+    .cel-title {
+      font-family: var(--serif);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .cel-subtitle {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    .unlocked-instagram-card {
+      background: var(--surface2);
+      border: 1px solid var(--green);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .unlocked-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+    }
+
+    .unlocked-left h5 {
+      font-family: var(--sans);
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .unlocked-left p {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--green);
+    }
+
+    .btn-open-ig {
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--sans);
+      font-size: 11.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* FLOATING TOAST */
+    .app-toast {
+      position: absolute;
+      top: 50px;
+      left: 16px;
+      right: 16px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      z-index: 250;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-70px);
+      opacity: 0;
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .app-toast.visible {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast-icon { color: var(--accent); }
+  
+    /* RADAR EMPTY SCANNING STATE (When no devices are nearby) */
+    .radar-empty-scan-state {
+      background: var(--surface);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-md);
+      padding: 24px 18px;
+      text-align: center;
+      margin: 10px 0 16px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .empty-radar-beacon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--accent-subtle);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 4px;
+    }
+
+    .beacon-wave {
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      opacity: 0.6;
+      animation: beaconRipple 2.2s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
+    }
+
+    .beacon-wave.w2 {
+      animation-delay: 1.1s;
+    }
+
+    @keyframes beaconRipple {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .radar-empty-scan-state h4 {
+      font-family: var(--serif);
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .radar-empty-scan-state p {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 290px;
+    }
+
+    .btn-simulate-detect {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: var(--radius-full);
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-simulate-detect:hover {
+      background: var(--accent2);
+      transform: translateY(-1px);
+    }
+
+    /* LOCATION INPUT WITH MAP INTEGRATION */
+    .location-input-wrap {
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+
+    .location-input-wrap .app-input {
+      padding-right: 90px;
+    }
+
+    .btn-pick-map-inline {
+      position: absolute;
+      right: 6px;
+      height: 34px;
+      padding: 0 12px;
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--accent);
+      font-family: var(--sans);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-pick-map-inline:hover {
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+    }
+
+    .location-preset-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .loc-chip {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-family: var(--sans);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .loc-chip:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    .location-verified-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      padding: 4px 10px;
+      background: var(--green-subtle);
+      border: 1px solid rgba(107, 140, 114, 0.35);
+      border-radius: var(--radius-full);
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    /* INTERACTIVE MAP MODAL */
+    .map-modal-sheet {
+      width: 100%;
+      background: var(--surface);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 14px 16px 28px 16px;
+      border-top: 1px solid var(--line);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 92%;
+    }
+
+    .map-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .map-modal-title {
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .map-canvas-container {
+      width: 100%;
+      height: 250px;
+      background: #e9ecef;
+      border-radius: var(--radius-md);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      cursor: crosshair;
+    }
+
+    [data-theme="dark"] .map-canvas-container {
+      background: #191c1e;
+    }
+
+    .map-svg-grid {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .map-pin-target {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -100%);
+      pointer-events: none;
+      transition: top 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), left 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .map-pin-badge {
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      white-space: nowrap;
+      margin-bottom: 2px;
+    }
+
+    .map-pin-icon-wrap {
+      color: var(--accent);
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
+    }
+
+    .map-pin-pulse-ring {
+      width: 16px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(207, 112, 82, 0.3);
+      border: 1px solid var(--accent);
+      margin-top: -4px;
+    }
+
+    .map-info-card {
+      background: var(--surface2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .map-info-title {
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .map-info-coords {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .map-actions-row {
+      display: flex;
+      gap: 8px;
+    }
+
+</style>
+</head>
+<body>
+
+  <!-- DESKTOP COMPANION CONTROLLER BAR -->
+  <header class="companion-toolbar">
+    <div class="brand-meta">
+      <div class="brand-badge">
+        <svg width="22" height="22" viewBox="0 0 48 48" fill="none" style="vertical-align: middle;">
+          <circle cx="19" cy="24" r="14" stroke="#e18462" stroke-width="4.5" />
+          <circle cx="29" cy="24" r="14" stroke="#cf7052" stroke-width="4.5" />
+        </svg>
+        Sync <span>APK Web Prototype</span>
+      </div>
+      <span class="tag-prototype">Production Ready</span>
+    </div>
+
+    <div class="toolbar-actions">
+      <!-- Screen Shortcuts -->
+      <button class="tool-btn" onclick="navigateToScreen('splash')">1. Splash</button>
+      <button class="tool-btn" onclick="navigateToScreen('welcome')">2. Welcome</button>
+      <button class="tool-btn" onclick="navigateToScreen('setup')">3. Setup</button>
+      <button class="tool-btn" onclick="navigateToScreen('main', 'radar')">4. Radar</button>
+      <button class="tool-btn" onclick="navigateToScreen('main', 'discovered')">5. Discovered</button>
+      <button class="tool-btn" onclick="navigateToScreen('main', 'profile')">6. Profile</button>
+
+      <!-- Theme Switcher -->
+      <button class="tool-btn" id="themeToggleBtn" onclick="toggleAppTheme()">
+        <span id="themeBtnIcon">🌙</span> Dark Mode
+      </button>
+
+      <!-- Simulation Tools -->
+      <button class="tool-btn" onclick="simulateNewNearbyPeer()" style="color: #8bad91; border-color: rgba(139,173,145,0.4);">
+        ⚡ Detect Peer
+      </button>
+      <button class="tool-btn" onclick="simulateIncomingRequest()" style="color: #e18462; border-color: rgba(225,132,98,0.4);">
+        📩 Request
+      </button>
+    </div>
+  </header>
+
+  <!-- UNIVERSAL MOBILE PHONE STAGE -->
+  <main class="phone-stage">
+    <div class="phone-frame" id="phoneContainer">
+
+      <!-- Dynamic Island / Top Camera Cutout -->
+      <div class="phone-notch">
+        <div class="notch-sensor"></div>
+        <div class="notch-camera"></div>
+      </div>
+
+      <!-- Real Mobile Status Bar -->
+      <div class="phone-status-bar">
+        <span id="statusBarClock">9:41</span>
+        <div class="status-icons">
+          <!-- 5G / Cellular -->
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.2.2-.2.51 0 .71.2.2.51.2.71 0l1.83-1.83C8.4 19.38 10.13 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+          <!-- Wi-Fi -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 3.32c3.56 0 6.83 1.34 9.34 3.55L12 19.09 2.66 10.87A13.88 13.88 0 0 1 12 7.32z"/></svg>
+          <!-- Battery -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14c0 .55-.45 1-1 1H8c-.55 0-1-.45-1-1V5c0-.55.45-1 1-1h2V2h4v2h2c.55 0 1 .45 1 1z"/></svg>
+        </div>
+      </div>
+
+      <!-- APP VIEWPORT -->
+      <div class="app-viewport" id="appViewport">
+
+        <!-- ==============================================
+             1. SPLASH SCREEN (Sync Interlocking Circles Logo)
+             ============================================== -->
+        <section class="screen-view active" id="screen-splash">
+          <div class="splash-logo-wrap">
+              <svg class="sync-rings-icon" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="helixGradLg" x1="16" y1="12" x2="64" y2="68" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#ff9a7f" />
+                    <stop offset="35%" stop-color="#cf7052" />
+                    <stop offset="70%" stop-color="#e18462" />
+                    <stop offset="100%" stop-color="#91331c" />
+                  </linearGradient>
+                  <filter id="helixGlowLg" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#cf7052" flood-opacity="0.45"/>
+                  </filter>
+                </defs>
+                <g filter="url(#helixGlowLg)">
+                  <path d="M 52 24 C 52 16.27 45.73 10 38 10 C 27.5 10 19 18.5 19 29 C 19 36.5 23.5 43 30.5 45.5 L 49.5 34.5 C 56.5 37 61 43.5 61 51 C 61 61.5 52.5 70 42 70 C 34.27 70 28 63.73 28 56" 
+                        stroke="url(#helixGradLg)" stroke-width="7.5" stroke-linecap="round"/>
+                  <circle cx="40" cy="40" r="4.5" fill="#ffffff" />
+                  <circle cx="40" cy="40" r="2.2" fill="#cf7052" />
+                </g>
+              </svg>
+          </div>
+          <h1 class="splash-title">Sync<span>.</span></h1>
+          <p class="splash-tagline">Meet nearby. Connect by choice.</p>
+          <div class="splash-loader-bar">
+            <div class="splash-loader-fill"></div>
+          </div>
+        </section>
+
+        <!-- ==============================================
+             2. WELCOME / ONBOARDING CAROUSEL WITH PICTURES
+             ============================================== -->
+        <section class="screen-view" id="screen-welcome">
+          <div class="welcome-top">
+            <div class="mini-logo-lockup">
+                <svg width="26" height="26" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="helixGradSm" x1="16" y1="12" x2="64" y2="68" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stop-color="#ff9a7f" />
+                      <stop offset="50%" stop-color="#cf7052" />
+                      <stop offset="100%" stop-color="#91331c" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M 52 24 C 52 16.27 45.73 10 38 10 C 27.5 10 19 18.5 19 29 C 19 36.5 23.5 43 30.5 45.5 L 49.5 34.5 C 56.5 37 61 43.5 61 51 C 61 61.5 52.5 70 42 70 C 34.27 70 28 63.73 28 56" 
+                        stroke="url(#helixGradSm)" stroke-width="8" stroke-linecap="round"/>
+                  <circle cx="40" cy="40" r="4.8" fill="#cf7052" />
+                  <circle cx="40" cy="40" r="2.2" fill="#ffffff" />
+                </svg>
+              <span class="mini-brand-name">Sync</span>
+            </div>
+            <button class="welcome-skip" onclick="navigateToScreen('setup')">Skip</button>
+          </div>
+
+          <div class="welcome-carousel">
+            <!-- Slide 1 -->
+            <div class="welcome-slide active" id="slide-1">
+              <div class="welcome-hero-art">
+                <div class="radar-circle c3"></div>
+                <div class="radar-circle c2"></div>
+                <div class="radar-circle c1"></div>
+                <div class="center-target">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+                <img src="assets/portraits/portrait_02.jpg" alt="Arun K" class="orbit-avatar p1">
+                <img src="assets/portraits/portrait_03.jpg" alt="Priya M" class="orbit-avatar p2">
+                <img src="assets/portraits/portrait_04.jpg" alt="Jamie M" class="orbit-avatar p3">
+                <img src="assets/portraits/portrait_01.jpg" alt="Sara R" class="orbit-avatar p4">
+              </div>
+              <h2 class="welcome-title">Meet nearby.<br>Connect by <em>choice.</em></h2>
+              <p class="welcome-desc">Discover opted-in people around you through Bluetooth radar. Zero cloud tracking, zero location broadcasting.</p>
+            </div>
+
+            <!-- Slide 2 -->
+            <div class="welcome-slide" id="slide-2">
+              <div class="welcome-hero-art">
+                <div style="width: 120px; height: 120px; border-radius: 50%; background: var(--accent-subtle); border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;">
+                  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#cf7052" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+              </div>
+              <h2 class="welcome-title">Instagram stays<br><em>strictly private.</em></h2>
+              <p class="welcome-desc">Your Instagram username remains locked and hidden until both people mutually accept a connection request.</p>
+            </div>
+
+            <!-- Slide 3 -->
+            <div class="welcome-slide" id="slide-3">
+              <div class="welcome-hero-art">
+                <div style="width: 120px; height: 120px; border-radius: 50%; background: var(--green-subtle); border: 2px solid var(--green); display: flex; align-items: center; justify-content: center;">
+                  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#6b8c72" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                  </svg>
+                </div>
+              </div>
+              <h2 class="welcome-title">Encounters stay<br><em>saved in feed.</em></h2>
+              <p class="welcome-desc">When people walk out of radar range, they won't vanish. You can review profiles and connect whenever you choose.</p>
+            </div>
+          </div>
+
+          <!-- Carousel Indicators -->
+          <div class="welcome-indicators">
+            <span class="carousel-dot active" onclick="setSlide(1)"></span>
+            <span class="carousel-dot" onclick="setSlide(2)"></span>
+            <span class="carousel-dot" onclick="setSlide(3)"></span>
+          </div>
+
+          <div class="welcome-actions">
+            <button class="btn-primary" onclick="nextWelcomeSlide()">Next</button>
+            <button class="btn-secondary" onclick="navigateToScreen('setup')">I already have an account</button>
+          </div>
+        </section>
+
+        <!-- ==============================================
+             3. PROFILE SETUP & USERNAME STRICT VALIDATION
+             ============================================== -->
+        <section class="screen-view" id="screen-setup">
+          <div class="screen-header-block">
+            <h2 class="screen-headline">Set up your profile</h2>
+            <p class="screen-subline">Make it easy for nearby people to recognise you in physical space.</p>
+          </div>
+
+          <!-- Avatar Picker -->
+          <div class="avatar-picker-section">
+            <div class="avatar-preview-wrap" onclick="triggerPhotoUpload()" style="cursor: pointer;">
+              <img src="" id="currentAvatarImg" alt="Profile" class="avatar-preview-img" style="display:none;">
+              <div id="avatarPlaceholderIcon" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:var(--surface-subtle);border-radius:50%;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--terracotta)" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </div>
+              <div class="avatar-badge-edit">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </div>
+            </div>
+            <input type="file" id="photoFileInput" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event)">
+            <button type="button" class="upload-photo-btn" onclick="triggerPhotoUpload()" style="margin-top:8px;background:none;border:none;color:var(--terracotta);font-family:var(--font-sans);font-weight:600;font-size:12.5px;cursor:pointer;">
+              Upload profile photo
+            </button>
+          </div>
+            <div class="avatar-picker-presets">
+              <button class="avatar-thumb-btn selected" onclick="selectPresetAvatar('portrait_05.jpg', this)">
+                <img src="assets/portraits/portrait_05.jpg" alt="Preset 1">
+              </button>
+              <button class="avatar-thumb-btn" onclick="selectPresetAvatar('portrait_02.jpg', this)">
+                <img src="assets/portraits/portrait_02.jpg" alt="Preset 2">
+              </button>
+              <button class="avatar-thumb-btn" onclick="selectPresetAvatar('portrait_04.jpg', this)">
+                <img src="assets/portraits/portrait_04.jpg" alt="Preset 3">
+              </button>
+              <button class="avatar-thumb-btn" onclick="selectPresetAvatar('portrait_03.jpg', this)">
+                <img src="assets/portraits/portrait_03.jpg" alt="Preset 4">
+              </button>
+              <button class="avatar-thumb-btn" onclick="selectPresetAvatar('portrait_01.jpg', this)">
+                <img src="assets/portraits/portrait_01.jpg" alt="Preset 5">
+              </button>
+            </div>
+          </div>
+
+          <!-- Setup Form -->
+          <form id="profileForm" onsubmit="handleProfileSubmit(event)">
+            
+            <!-- Real Name Input -->
+            <div class="form-group">
+              <label class="form-label" for="inputRealName">
+                Display Name
+                <span class="form-label-opt">Required</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <input type="text" id="inputRealName" class="app-input" placeholder="e.g. your full name" value="" required oninput="validateProfileForm()">
+              </div>
+            </div>
+
+            <!-- Sync Username with Realtime Strict Validation -->
+            <div class="form-group">
+              <label class="form-label" for="inputUsername">
+                Sync Username
+                <span class="form-label-opt">Unique ID</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon" style="font-family: var(--mono); font-weight: 600; font-size: 14px;">@</span>
+                <input type="text" id="inputUsername" class="app-input" placeholder="e.g. sync_handle" value="" required oninput="validateUsernameLive(this.value)">
+                <span class="input-status-icon" id="usernameStatusIcon"></span>
+              </div>
+              <div class="validation-hint valid" id="usernameHint">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>@jishnu_pg is valid & available</span>
+              </div>
+            </div>
+
+            <!-- Instagram Username with Double Verification Card -->
+            <div class="form-group">
+              <label class="form-label" for="inputInstagram">
+                Instagram Username
+                <span class="form-label-opt">Private until match</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                </span>
+                <input type="text" id="inputInstagram" class="app-input" placeholder="e.g. your_instagram_id" value="" oninput="handleInstagramInput(this.value)">
+                <span class="input-status-icon" style="color: var(--muted);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              </div>
+
+              <!-- Double Validation Account Preview Card -->
+              <div class="ig-validation-card" id="igValidationCard">
+                <div class="ig-val-left">
+                  <img src="assets/portraits/portrait_05.jpg" class="ig-avatar-mini" alt="IG">
+                  <div class="ig-val-info">
+                    <h5 id="igPreviewHandle">@jishnu.tech</h5>
+                    
+                  </div>
+                </div>
+                <button type="button" class="btn-verify-chip verified" id="btnVerifyIg" onclick="toggleVerifyInstagram()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Verified
+                </button>
+              </div>
+            </div>
+
+            <!-- Short Introduction / Bio -->
+            <div class="form-group">
+              <label class="form-label" for="inputBio">
+                Short Introduction
+                <span class="form-label-opt">Optional</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </span>
+                <input type="text" id="inputBio" class="app-input" maxlength="60" placeholder="e.g. Coffee, Android dev & good conversation" value="" oninput="updateBioCounter(this.value)">
+              </div>
+              <div class="char-counter" id="bioCounter">0 / 60</div>
+            </div>
+
+            <!-- Location Input (Type or Select on Map) -->
+            <div class="form-group">
+              <label class="form-label" for="inputLocation">
+                <span>Location / Campus</span>
+                <span class="form-label-opt">Optional</span>
+              </label>
+              <div class="location-input-wrap">
+                <span class="input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                </span>
+                <input type="text" id="inputLocation" class="app-input" placeholder="Type location or select from map..." value="">
+                <button type="button" class="btn-pick-map-inline" onclick="openLocationMapModal()" title="Select precise location on map">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                  Map
+                </button>
+              </div>
+
+              <!-- Quick Location Preset Chips -->
+              
+
+              <div id="locationVerifiedBadge" class="location-verified-pill" style="display: none;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="locVerifiedText">Precision map coordinates locked</span>
+              </div>
+            </div>
+
+            <!-- Privacy Guarantee Box -->
+            <div class="privacy-guarantee-box">
+              <div class="guarantee-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div class="guarantee-text">
+                <h4>Your profile, your choice</h4>
+                <p>Nearby people see only your name, photo, and bio. Instagram is strictly locked until mutual agreement.</p>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary" id="btnSaveProfile">
+              Save and continue
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </form>
+        </section>
+
+        <!-- ==============================================
+             4. MAIN APP LAYOUT (Radar, Discovered, Profile)
+             ============================================== -->
+        <section class="screen-view" id="screen-main">
+          
+          <div class="app-main-layout">
+            
+            <!-- Fixed Top Bar -->
+            <div class="app-topbar">
+              <div class="topbar-brand">
+                <svg width="26" height="26" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="helixGradSm" x1="16" y1="12" x2="64" y2="68" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stop-color="#ff9a7f" />
+                      <stop offset="50%" stop-color="#cf7052" />
+                      <stop offset="100%" stop-color="#91331c" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M 52 24 C 52 16.27 45.73 10 38 10 C 27.5 10 19 18.5 19 29 C 19 36.5 23.5 43 30.5 45.5 L 49.5 34.5 C 56.5 37 61 43.5 61 51 C 61 61.5 52.5 70 42 70 C 34.27 70 28 63.73 28 56" 
+                        stroke="url(#helixGradSm)" stroke-width="8" stroke-linecap="round"/>
+                  <circle cx="40" cy="40" r="4.8" fill="#cf7052" />
+                  <circle cx="40" cy="40" r="2.2" fill="#ffffff" />
+                </svg>
+                <span class="brand-wordmark">Sync</span>
+              </div>
+              
+
+              <div class="topbar-actions">
+                <button class="icon-btn" title="Simulate Encounter" onclick="simulateNewNearbyPeer()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Scrollable Content Container -->
+            <div class="tab-content-container">
+
+              <!-- TAB 1: RADAR (HOME) -->
+              <div class="tab-content" id="tab-radar" style="display: block;">
+                
+                <!-- Power Mode Selector -->
+                <div class="power-mode-selector">
+                  <button class="mode-chip" onclick="setPowerMode('off', this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    Off
+                  </button>
+                  <button class="mode-chip active" onclick="setPowerMode('smart', this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    Smart
+                  </button>
+                  <button class="mode-chip" onclick="setPowerMode('extended', this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5 17.5 17.5M12 2v20l5.5-5.5L12 12l5.5-5.5L12 2z"/></svg>
+                    Extended (70m)
+                  </button>
+                </div>
+
+                <!-- Animated Radar Hero Viewport -->
+                <div class="radar-card-container">
+                  <div class="radar-viewport">
+                    <div class="radar-ring r3"></div>
+                    <div class="radar-ring r2"></div>
+                    <div class="radar-ring r1"></div>
+                    <div class="radar-sweep-beam"></div>
+
+                    <!-- Center User Avatar -->
+                    <div class="radar-center-avatar" title="You">
+                      <img src="assets/portraits/portrait_05.jpg" id="radarCenterImg" alt="You">
+                    </div>
+
+                    <!-- Orbiting Peer Pins (Only displayed when devices are detected nearby) -->
+                    <div id="radarDynamicPins"></div>
+                  </div>
+
+                  <div class="radar-summary-text" id="radarSummaryCount">4 people in radar</div>
+                  <p class="radar-subcaption">Profiles persist in your feed even when out of range</p>
+                </div>
+
+                <!-- Active People Nearby Header -->
+                <div class="section-title-row">
+                  <h3 class="section-title-h3">People nearby</h3>
+                  <span class="count-chip" id="radarNearbyCount">4 active</span>
+                </div>
+
+                <!-- Peer Cards List (with Skip & Connect side-by-side) -->
+                <div class="peer-card-list" id="radarPeerCardList">
+                  <!-- Injected via JavaScript -->
+                </div>
+              </div>
+
+              <!-- TAB 2: DISCOVERED LIST -->
+              <div class="tab-content" id="tab-discovered" style="display: none;">
+                
+                <!-- Search & Filters -->
+                <div class="search-filter-box">
+                  <div class="search-input-wrap">
+                    <span class="input-icon">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </span>
+                    <input type="text" class="app-input" id="searchDiscoveredInput" placeholder="Search people by name or bio..." oninput="handleSearchFilter(this.value)">
+                  </div>
+
+                  <div class="filter-pills-row">
+                    <button class="filter-pill active" onclick="setDiscoveredFilter('all', this)">All (<span id="countAll">5</span>)</button>
+                    <button class="filter-pill" onclick="setDiscoveredFilter('in-radar', this)">In Radar (<span id="countInRadar">4</span>)</button>
+                    <button class="filter-pill" onclick="setDiscoveredFilter('out-of-radar', this)">Out of Radar (<span id="countOutRadar">1</span>)</button>
+                    <button class="filter-pill" onclick="setDiscoveredFilter('requests', this)">Requests (1)</button>
+                  </div>
+                </div>
+
+                <!-- Incoming Request Card -->
+                <div class="incoming-request-card" id="incomingRequestHero">
+                  <div class="incoming-badge-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Incoming Connection Request
+                  </div>
+                  <div class="peer-top-row" onclick="openPersonPreview(0)">
+                    <div class="peer-avatar-wrap">
+                      <img src="assets/portraits/portrait_02.jpg" alt="Arun K" class="peer-avatar-img">
+                      <span class="peer-online-dot"></span>
+                    </div>
+                    <div class="peer-info-col">
+                      <div class="peer-name-line">
+                        <span class="peer-name">Arun K, 23</span>
+                        <span class="peer-distance-badge badge-close">Very Close • 3m</span>
+                      </div>
+                      <div class="peer-privacy-row">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>Instagram hidden</span>
+                      </div>
+                      <p class="peer-bio-text">Android engineer • Coffee and mechanical keyboards. Would love to connect!</p>
+                    </div>
+                  </div>
+                  <div class="incoming-actions">
+                    <button class="btn-decline" onclick="declineRequest(0)">Decline</button>
+                    <button class="btn-accept" onclick="acceptRequest(0)">Accept & Reveal</button>
+                  </div>
+                </div>
+
+                <!-- Discovered Feed Cards -->
+                <div class="peer-card-list" id="discoveredFeedList">
+                  <!-- Injected via JavaScript -->
+                </div>
+              </div>
+
+              <!-- TAB 3: PROFILE & SETTINGS -->
+              <div class="tab-content" id="tab-profile" style="display: none;">
+                
+                <!-- Profile Hero -->
+                <div class="profile-hero-card">
+                  <img src="assets/portraits/portrait_05.jpg" id="myProfileCardImg" alt="Profile" class="my-avatar-large">
+                  <h3 class="my-profile-name" id="myProfileCardName">Jishnu PG</h3>
+                  <div class="my-profile-handle" id="myProfileCardHandle">@jishnu_pg</div>
+                  <p class="my-profile-bio" id="myProfileCardBio">Coffee, clean UI/UX & acoustic music</p>
+                  
+                  <button class="btn-secondary" style="height: 36px; font-size: 12.5px;" onclick="navigateToScreen('setup')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    Edit Profile Details
+                  </button>
+
+                  <div class="profile-stats-row">
+                    <div class="stat-box">
+                      <div class="stat-val">28</div>
+                      <div class="stat-lbl">Encounters</div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-val" style="color: var(--accent);">6</div>
+                      <div class="stat-lbl">Connected</div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-val" style="color: var(--green);">Active</div>
+                      <div class="stat-lbl">Radar</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="settings-group-title">Radar & Discovery</div>
+                <div class="settings-card">
+                  <div class="settings-row">
+                    <div class="settings-left-info">
+                      <h4>Smart Proximity Scanning</h4>
+                      <p>Auto-adjust scan cycles based on phone motion</p>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" checked onchange="showToast('Smart proximity scanning updated')">
+                      <span class="slider-toggle"></span>
+                    </label>
+                  </div>
+                  <div class="settings-row">
+                    <div class="settings-left-info">
+                      <h4>Ghost Mode (Incognito)</h4>
+                      <p>Scan for others without broadcasting yourself</p>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" onchange="toggleGhostMode(this.checked)">
+                      <span class="slider-toggle"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-group-title">Appearance & Theme</div>
+                <div class="settings-card">
+                  <div class="settings-row">
+                    <div class="settings-left-info">
+                      <h4>Dark Mode</h4>
+                      <p>Obsidian dark theme with warm terracotta accent</p>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="settingsDarkToggle" onchange="toggleAppTheme(this.checked)">
+                      <span class="slider-toggle"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-group-title">Safety & Reset</div>
+                <div class="settings-card">
+                  <div class="settings-row" style="cursor: pointer;" onclick="resetDemo()">
+                    <div class="settings-left-info">
+                      <h4 style="color: var(--accent);">Reset Demo to Start</h4>
+                      <p>Restart welcome onboarding flow</p>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 16px;">
+                  <span style="font-family: var(--mono); font-size: 10.5px; color: var(--faint);">Sync APK v1.0.0 • Universal Android & iOS</span>
+                </div>
+              </div>
+
+            </div> <!-- /tab-content-container -->
+
+            <!-- Fixed Bottom Navigation Bar -->
+            <nav class="app-bottom-nav">
+              <button class="nav-tab-item active" id="tabBtnRadar" onclick="switchMainTab('radar')">
+                <div class="nav-tab-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </div>
+                <span class="nav-tab-label">Radar</span>
+              </button>
+
+              <button class="nav-tab-item" id="tabBtnDiscovered" onclick="switchMainTab('discovered')">
+                <div class="nav-tab-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <span class="nav-tab-badge">1</span>
+                </div>
+                <span class="nav-tab-label">Discovered</span>
+              </button>
+
+              <button class="nav-tab-item" id="tabBtnProfile" onclick="switchMainTab('profile')">
+                <div class="nav-tab-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                </div>
+                <span class="nav-tab-label">Profile</span>
+              </button>
+            </nav>
+
+          </div> <!-- /app-main-layout -->
+        </section>
+
+      </div> <!-- /app-viewport -->
+
+      <!-- Home Indicator Bar -->
+      <div class="home-indicator-bar"></div>
+
+      <!-- ==============================================
+           MODAL 1: PERSON PREVIEW (BEFORE CONNECTION)
+           ============================================== -->
+      
+      <!-- ==============================================
+           MODAL 3: PRECISE MAP LOCATION PICKER
+           ============================================== -->
+      <div class="modal-overlay" id="locationMapModal" onclick="closeModalOnBackdrop(event, 'locationMapModal')">
+        <div class="map-modal-sheet">
+          <div class="sheet-drag-handle"></div>
+          
+          <div class="map-header-row">
+            <h3 class="map-modal-title">Select Precise Location</h3>
+            <button class="icon-btn" onclick="closeModal('locationMapModal')" title="Close">✕</button>
+          </div>
+
+          <!-- Stylized Interactive Vector Map -->
+          <div class="map-canvas-container" id="mapCanvasContainer" onclick="handleMapClick(event)">
+            <svg class="map-svg-grid" viewBox="0 0 400 250" preserveAspectRatio="none">
+              <!-- Water body / Canal -->
+              <path d="M 0 180 Q 120 160 220 190 T 400 170 L 400 250 L 0 250 Z" fill="rgba(107, 140, 114, 0.18)" />
+              <path d="M 0 185 Q 120 165 220 195 T 400 175" stroke="#6b8c72" stroke-width="2" fill="none" opacity="0.4"/>
+              
+              <!-- Green Park Zones -->
+              <rect x="20" y="25" width="75" height="55" rx="10" fill="rgba(107, 140, 114, 0.12)" stroke="rgba(107, 140, 114, 0.25)" />
+              <rect x="290" y="30" width="85" height="60" rx="10" fill="rgba(107, 140, 114, 0.12)" stroke="rgba(107, 140, 114, 0.25)" />
+              
+              <!-- Main Road Network Grid -->
+              <line x1="0" y1="110" x2="400" y2="110" stroke="#d9d5cc" stroke-width="12" />
+              <line x1="0" y1="110" x2="400" y2="110" stroke="#fbfaf6" stroke-width="8" />
+              <line x1="160" y1="0" x2="160" y2="250" stroke="#d9d5cc" stroke-width="12" />
+              <line x1="160" y1="0" x2="160" y2="250" stroke="#fbfaf6" stroke-width="8" />
+              
+              <line x1="60" y1="0" x2="60" y2="180" stroke="#d9d5cc" stroke-width="6" />
+              <line x1="260" y1="0" x2="260" y2="190" stroke="#d9d5cc" stroke-width="6" />
+              <line x1="0" y1="50" x2="400" y2="50" stroke="#d9d5cc" stroke-width="6" />
+
+              <!-- Campus Buildings -->
+              <rect x="180" y="25" width="60" height="30" rx="4" fill="#cf7052" opacity="0.15" />
+              <rect x="180" y="65" width="60" height="35" rx="4" fill="#cf7052" opacity="0.25" />
+              <rect x="80" y="130" width="65" height="40" rx="4" fill="#cf7052" opacity="0.18" />
+              <rect x="180" y="130" width="85" height="45" rx="4" fill="#cf7052" opacity="0.28" />
+
+              <text x="185" y="44" font-family="'DM Mono', monospace" font-size="8" fill="#cf7052">Maker Village</text>
+              <text x="185" y="154" font-family="'DM Mono', monospace" font-size="8.5" fill="#9f4e37">Tech Zone 2</text>
+              <text x="30" y="55" font-family="'DM Mono', monospace" font-size="8" fill="#6b8c72">Campus Lawn</text>
+            </svg>
+
+            <!-- Movable Target Pin -->
+            <div class="map-pin-target" id="mapTargetPin" style="top: 52%; left: 54%;">
+              <div class="map-pin-badge" id="mapPinBadge">10.054° N, 76.353° E</div>
+              <div class="map-pin-icon-wrap">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#cf7052" stroke="#ffffff" stroke-width="1.5">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                  <circle cx="12" cy="9" r="2.5" fill="#ffffff"/>
+                </svg>
+              </div>
+              <div class="map-pin-pulse-ring"></div>
+            </div>
+          </div>
+
+          <!-- Location Info Box -->
+          <div class="map-info-card">
+            <div class="map-info-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span id="selectedMapAddressName">Maker Village, Technology Innovation Zone</span>
+            </div>
+            <div class="map-info-coords" id="selectedMapCoordsText">Kalamassery, Kochi • Lat: 10.0542° N, Long: 76.3538° E (±2m GPS)</div>
+          </div>
+
+          <div class="map-actions-row">
+            <button type="button" class="btn-secondary" style="flex: 1;" onclick="useCurrentGpsLocation()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 19 21 12 17 5 21 12 2"/></svg>
+              Current GPS
+            </button>
+            <button type="button" class="btn-primary" style="flex: 1.6;" onclick="confirmMapLocation()">
+              Confirm Location
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="personPreviewModal" onclick="closeModalOnBackdrop(event, 'personPreviewModal')">
+        <div class="modal-sheet">
+          <div class="sheet-drag-handle"></div>
+          <img src="" id="modalPreviewAvatar" alt="" class="preview-modal-avatar">
+          <h3 class="preview-modal-title" id="modalPreviewName">Name</h3>
+          <div style="text-align: center; margin: 3px 0 10px 0;">
+            <span class="peer-distance-badge badge-close" id="modalPreviewBadge">Very Close</span>
+          </div>
+          <p class="peer-bio-text" style="text-align: center; font-size: 13px; margin-bottom: 12px;" id="modalPreviewBio">Bio</p>
+
+          <!-- Locked Instagram Box -->
+          <div class="locked-instagram-box">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <h4>Instagram handle locked</h4>
+            <p>Will be revealed automatically after both of you accept the connection request.</p>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 14px;">
+            <button class="btn-card-skip" style="height: 44px;" onclick="skipCurrentModalPeer()">✕ Skip / Dismiss</button>
+            <button class="btn-primary" style="height: 44px; flex: 1.5;" id="modalConnectBtn" onclick="connectCurrentModalPeer()">
+              Send Request
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================
+           MODAL 2: "IT'S A CONNECTION!" S17 MUTUAL REVEAL
+           (Strictly NO heart icon - Uses Sync Dual Rings)
+           ============================================== -->
+      <div class="modal-overlay" id="mutualMatchModal" onclick="closeModalOnBackdrop(event, 'mutualMatchModal')">
+        <div class="modal-sheet">
+          <div class="sheet-drag-handle"></div>
+          <div class="celebration-wrap">
+            <div class="celebration-avatars">
+              <img src="assets/portraits/portrait_05.jpg" id="celMyAvatar" alt="You" class="cel-avatar">
+              <!-- Official Sync Interlocking Circles Badge (NO HEART) -->
+              <div class="cel-sync-badge" title="Sync Connection">
+                <svg width="22" height="22" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 52 24 C 52 16.27 45.73 10 38 10 C 27.5 10 19 18.5 19 29 C 19 36.5 23.5 43 30.5 45.5 L 49.5 34.5 C 56.5 37 61 43.5 61 51 C 61 61.5 52.5 70 42 70 C 34.27 70 28 63.73 28 56" 
+                        stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+                  <circle cx="40" cy="40" r="4.8" fill="#ffffff" />
+                </svg>
+              </div>
+              <img src="assets/portraits/portrait_02.jpg" id="celPeerAvatar" alt="Peer" class="cel-avatar">
+            </div>
+
+            <h3 class="cel-title">It’s a connection!</h3>
+            <p class="cel-subtitle">You and <strong id="celPeerName">Arun</strong> accepted each other. Verified Instagram handle is now unlocked.</p>
+
+            <div class="unlocked-instagram-card">
+              <div class="unlocked-left">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#cf7052" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                <div>
+                  <h5 id="celInstagramHandle">@arun_dev</h5>
+                  <p>Verified authentic handle</p>
+                </div>
+              </div>
+              <a href="#" id="celInstagramLink" target="_blank" class="btn-open-ig">
+                Open IG
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </a>
+            </div>
+
+            <button class="btn-primary" onclick="closeMutualModal()">
+              Great! Back to Radar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- IN-APP FLOATING TOAST -->
+      <div class="app-toast" id="appToast">
+        <span class="toast-icon">✓</span>
+        <span id="toastMsg">Action successful</span>
+      </div>
+
+    </div> <!-- /phone-frame -->
+  </main>
+
+  <!-- ==============================================
+       LOGIC & DATA CONTROLLER
+       ============================================== -->
+  <script>
+    // CORRECT PORTRAIT DATA MAPPING
+    const initialPeers = [
+      {
+        id: 1,
+        name: "Arun K",
+        age: 23,
+        username: "arun_dev",
+        instagram: "arun_dev",
+        avatar: "assets/portraits/portrait_02.jpg", // Male dark hair
+        bio: "Android dev • Mechanical keyboards & filter coffee enthusiast",
+        distanceBadge: "Very Close",
+        badgeClass: "badge-close",
+        distanceMeters: "3m",
+        tags: ["Tech", "Coffee", "Android"],
+        inRadar: true,
+        isRequested: false
+      },
+      {
+        id: 2,
+        name: "Priya M",
+        age: 22,
+        username: "priya_m",
+        instagram: "priya.designs",
+        avatar: "assets/portraits/portrait_03.jpg", // Female warm sweater
+        bio: "UI/UX designer • Always hunting for new aesthetics and indie music",
+        distanceBadge: "Nearby",
+        badgeClass: "badge-nearby",
+        distanceMeters: "12m",
+        tags: ["Design", "Music", "Art"],
+        inRadar: true,
+        isRequested: false
+      },
+      {
+        id: 3,
+        name: "Jamie M",
+        age: 24,
+        username: "jamie_m",
+        instagram: "jamie_travels",
+        avatar: "assets/portraits/portrait_04.jpg", // Male light curls
+        bio: "Backpacker & landscape photographer currently exploring South India",
+        distanceBadge: "Nearby",
+        badgeClass: "badge-nearby",
+        distanceMeters: "18m",
+        tags: ["Travel", "Photos", "Cinema"],
+        inRadar: true,
+        isRequested: false
+      },
+      {
+        id: 4,
+        name: "Sara R",
+        age: 21,
+        username: "sara_r",
+        instagram: "sara.reads",
+        avatar: "assets/portraits/portrait_01.jpg", // Female dark hair
+        bio: "Literature student & barista • Reading Murakami and brewing chemex",
+        distanceBadge: "Extended Range",
+        badgeClass: "badge-extended",
+        distanceMeters: "42m",
+        tags: ["Books", "Coffee", "Writing"],
+        inRadar: true,
+        isRequested: false
+      },
+      {
+        id: 5,
+        name: "Daniel L",
+        age: 25,
+        username: "daniel_l",
+        instagram: "daniel_sound",
+        avatar: "assets/portraits/portrait_06.jpg",
+        bio: "Audio engineer • Modular synthesizers & cycling around the lake",
+        distanceBadge: "Out of radar",
+        badgeClass: "badge-extended",
+        distanceMeters: "Spotted 1h ago",
+        tags: ["Audio", "Cycling", "Indie"],
+        inRadar: false, // PERSISTENT OUT OF RADAR
+        isRequested: false
+      }
+    ];
+
+    let peers = [...initialPeers];
+    let selectedModalPeer = null;
+    let currentSlide = 1;
+
+    let userProfile = {
+      name: "Jishnu PG",
+      username: "jishnu_pg",
+      instagram: "jishnu.tech",
+      avatar: "assets/portraits/portrait_05.jpg",
+      bio: "Coffee, clean UI/UX & acoustic music",
+      location: "Kochi Tech Campus",
+      isIgVerified: true
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderPeerCards();
+      updateClock();
+      setInterval(updateClock, 30000);
+
+      // Splash timeout auto-advance after 2.2s
+      setTimeout(() => {
+        const splashScreen = document.getElementById('screen-splash');
+        if (splashScreen && splashScreen.classList.contains('active')) {
+          navigateToScreen('welcome');
+        }
+      }, 2200);
+    });
+
+    function updateClock() {
+      const now = new Date();
+      let hours = now.getHours();
+      let minutes = now.getMinutes();
+      minutes = minutes < 10 ? '0' + minutes : minutes;
+      const clockEl = document.getElementById('statusBarClock');
+      if (clockEl) clockEl.innerText = `${hours}:${minutes}`;
+    }
+
+    // SCREEN ROUTER
+    function navigateToScreen(screenId, mainTab = null) {
+      document.querySelectorAll('.screen-view').forEach(s => s.classList.remove('active'));
+      const target = document.getElementById(`screen-${screenId}`);
+      if (target) {
+        target.classList.add('active');
+      }
+
+      if (screenId === 'main' && mainTab) {
+        switchMainTab(mainTab);
+      }
+    }
+
+    // MAIN APP TABS
+    function switchMainTab(tabKey) {
+      document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+      const targetContent = document.getElementById(`tab-${tabKey}`);
+      if (targetContent) targetContent.style.display = 'block';
+
+      document.querySelectorAll('.nav-tab-item').forEach(b => b.classList.remove('active'));
+      if (tabKey === 'radar') document.getElementById('tabBtnRadar').classList.add('active');
+      if (tabKey === 'discovered') document.getElementById('tabBtnDiscovered').classList.add('active');
+      if (tabKey === 'profile') document.getElementById('tabBtnProfile').classList.add('active');
+    }
+
+    // ONBOARDING
+    function setSlide(n) {
+      currentSlide = n;
+      document.querySelectorAll('.welcome-slide').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.carousel-dot').forEach(d => d.classList.remove('active'));
+
+      const s = document.getElementById(`slide-${n}`);
+      if (s) s.classList.add('active');
+      const dots = document.querySelectorAll('.carousel-dot');
+      if (dots[n - 1]) dots[n - 1].classList.add('active');
+    }
+
+    function nextWelcomeSlide() {
+      if (currentSlide < 3) {
+        setSlide(currentSlide + 1);
+      } else {
+        navigateToScreen('setup');
+      }
+    }
+
+    
+    // MAP PICKER LOGIC
+    let currentSelectedLocation = "Maker Village, Kalamassery, Kochi";
+    let currentSelectedCoords = "10.0542° N, 76.3538° E";
+
+    function openLocationMapModal() {
+      openModal('locationMapModal');
+    }
+
+    function setLocationPreset(presetText) {
+      document.getElementById('inputLocation').value = presetText;
+      const badge = document.getElementById('locationVerifiedBadge');
+      const text = document.getElementById('locVerifiedText');
+      badge.style.display = 'inline-flex';
+      text.innerText = `Preset selected: ${presetText.split(',')[0]}`;
+      showToast(`Selected ${presetText}`);
+    }
+
+    function handleMapClick(e) {
+      const container = document.getElementById('mapCanvasContainer');
+      const rect = container.getBoundingClientRect();
+      const x = Math.max(10, Math.min(rect.width - 10, e.clientX - rect.left));
+      const y = Math.max(10, Math.min(rect.height - 10, e.clientY - rect.top));
+
+      const pctX = ((x / rect.width) * 100).toFixed(1);
+      const pctY = ((y / rect.height) * 100).toFixed(1);
+
+      const targetPin = document.getElementById('mapTargetPin');
+      targetPin.style.left = `${pctX}%`;
+      targetPin.style.top = `${pctY}%`;
+
+      // Generate realistic coordinates based on click
+      const lat = (10.0400 + (y / rect.height) * 0.0300).toFixed(4);
+      const lng = (76.3400 + (x / rect.width) * 0.0400).toFixed(4);
+      currentSelectedCoords = `${lat}° N, ${lng}° E`;
+
+      let spotName = "Maker Village Innovation Hub";
+      if (pctX < 35 && pctY < 50) spotName = "Campus North Lawn & Quad";
+      else if (pctX > 65 && pctY < 50) spotName = "East Academic Block A";
+      else if (pctY > 65) spotName = "Waterfront Promenade, Kochi";
+      else spotName = "Technology Innovation Zone, Kochi";
+
+      currentSelectedLocation = `${spotName} (${currentSelectedCoords})`;
+      document.getElementById('selectedMapAddressName').innerText = spotName;
+      document.getElementById('selectedMapCoordsText').innerText = `Kochi • Lat: ${lat}° N, Long: ${lng}° E (±2m precision)`;
+      document.getElementById('mapPinBadge').innerText = `${lat}° N, ${lng}° E`;
+    }
+
+    function useCurrentGpsLocation() {
+      const targetPin = document.getElementById('mapTargetPin');
+      targetPin.style.left = '50%';
+      targetPin.style.top = '48%';
+      currentSelectedLocation = "Kochi Tech Campus (10.0542° N, 76.3538° E)";
+      document.getElementById('selectedMapAddressName').innerText = "Kochi Tech Campus";
+      document.getElementById('selectedMapCoordsText').innerText = "Live device GPS fix • Accuracy: High (±1.8m)";
+      document.getElementById('mapPinBadge').innerText = "GPS Live Fix";
+      showToast("📍 Acquired high-precision device GPS");
+    }
+
+    function confirmMapLocation() {
+      const input = document.getElementById('inputLocation');
+      input.value = currentSelectedLocation;
+      const badge = document.getElementById('locationVerifiedBadge');
+      const text = document.getElementById('locVerifiedText');
+      badge.style.display = 'inline-flex';
+      text.innerText = `Precision Map Verified: ${currentSelectedLocation.split('(')[0]}`;
+      closeModal('locationMapModal');
+      showToast("📍 Precise location attached to profile");
+    }
+
+    // DYNAMIC RADAR PEERS RENDERING
+    // The person's profile on the radar ONLY shows when a device is detected nearby!
+    function renderDynamicRadarPins(activePeers) {
+      const pinContainer = document.getElementById('radarDynamicPins');
+      if (!pinContainer) return;
+
+      if (activePeers.length === 0) {
+        pinContainer.innerHTML = '';
+        return;
+      }
+
+      // Pre-calculated orbital coordinates for detected peers
+      const orbitPositions = [
+        { top: '34%', left: '76%', ring: 2 }, // Pin 1
+        { top: '74%', left: '32%', ring: 2 }, // Pin 2
+        { top: '24%', left: '26%', ring: 3 }, // Pin 3
+        { top: '72%', left: '72%', ring: 3 }  // Pin 4
+      ];
+
+      let pinsHtml = '';
+      activePeers.forEach((peer, i) => {
+        const pos = orbitPositions[i % orbitPositions.length];
+        const peerIdx = peers.findIndex(p => p.id === peer.id);
+        pinsHtml += `
+          <div class="radar-peer-pin pin-dynamic" 
+               style="top: ${pos.top}; left: ${pos.left}; animation: pulsePin 2.5s ease-in-out infinite;" 
+               title="${peer.name} (${peer.distanceBadge})" 
+               onclick="openPersonPreview(${peerIdx})">
+            <img src="${peer.avatar}" alt="${peer.name}">
+          </div>
+        `;
+      });
+
+      pinContainer.innerHTML = pinsHtml;
+    }
+
+    // USERNAME STRICT VALIDATION
+    function validateUsernameLive(value) {
+      const hint = document.getElementById('usernameHint');
+      const statusIcon = document.getElementById('usernameStatusIcon');
+      const input = document.getElementById('inputUsername');
+      const trimmed = value.trim().toLowerCase();
+
+      const regex = /^[a-z][a-z0-9_]{2,19}$/;
+
+      if (!trimmed) {
+        hint.className = 'validation-hint invalid';
+        hint.innerHTML = '<span>Username cannot be empty</span>';
+        statusIcon.innerHTML = '';
+        input.classList.add('error');
+        return false;
+      }
+
+      if (!regex.test(trimmed)) {
+        hint.className = 'validation-hint invalid';
+        hint.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>3-20 chars, letters/numbers/_ (starts with letter)</span>';
+        statusIcon.innerHTML = '<span style="color:var(--red);">✕</span>';
+        input.classList.add('error');
+        return false;
+      }
+
+      hint.className = 'validation-hint valid';
+      hint.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>@${trimmed} is available & valid!</span>`;
+      statusIcon.innerHTML = '<span style="color:var(--green);">✓</span>';
+      input.classList.remove('error');
+      return true;
+    }
+
+    function handleInstagramInput(val) {
+      const handle = val.replace('@', '').trim();
+      document.getElementById('igPreviewHandle').innerText = `@${handle || 'yourhandle'}`;
+    }
+
+    function toggleVerifyInstagram() {
+      const btn = document.getElementById('btnVerifyIg');
+      userProfile.isIgVerified = !userProfile.isIgVerified;
+      if (userProfile.isIgVerified) {
+        btn.className = 'btn-verify-chip verified';
+        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Verified';
+        showToast('Instagram handle verified authentic');
+      } else {
+        btn.className = 'btn-verify-chip';
+        btn.innerHTML = 'Verify';
+      }
+    }
+
+    function updateBioCounter(val) {
+      document.getElementById('bioCounter').innerText = `${val.length} / 60`;
+    }
+
+    function selectPresetAvatar(filename, el) {
+      document.querySelectorAll('.avatar-thumb-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      const path = `assets/portraits/${filename}`;
+      document.getElementById('currentAvatarImg').src = path;
+      userProfile.avatar = path;
+    }
+
+    function cycleAvatar() {
+      const list = ['portrait_01.jpg', 'portrait_02.jpg', 'portrait_03.jpg', 'portrait_04.jpg', 'portrait_05.jpg', 'portrait_06.jpg'];
+      const random = list[Math.floor(Math.random() * list.length)];
+      userProfile.avatar = `assets/portraits/${random}`;
+      document.getElementById('currentAvatarImg').src = userProfile.avatar;
+    }
+
+    function handleProfileSubmit(e) {
+      e.preventDefault();
+      const realName = document.getElementById('inputRealName').value.trim();
+      const username = document.getElementById('inputUsername').value.trim();
+      const bio = document.getElementById('inputBio').value.trim();
+      const location = document.getElementById('inputLocation').value.trim();
+
+      if (!validateUsernameLive(username)) {
+        showToast('Please fix username format first');
+        return;
+      }
+
+      userProfile.name = realName;
+      userProfile.username = username;
+      userProfile.bio = bio;
+      userProfile.location = location;
+
+      document.getElementById('myProfileCardName').innerText = realName;
+      document.getElementById('myProfileCardHandle').innerText = `@${username}`;
+      document.getElementById('myProfileCardBio').innerText = bio || 'No bio entered';
+      document.getElementById('myProfileCardImg').src = userProfile.avatar;
+      document.getElementById('radarCenterImg').src = userProfile.avatar;
+      document.getElementById('celMyAvatar').src = userProfile.avatar;
+
+      showToast('Profile saved successfully!');
+      navigateToScreen('main', 'radar');
+    }
+
+    // RENDER PEERS
+    function renderPeerCards() {
+      const radarFeed = document.getElementById('radarPeerCardList');
+      const discoveredFeed = document.getElementById('discoveredFeedList');
+
+      let radarHtml = '';
+      let discoveredHtml = '';
+
+      let countActive = 0;
+      let countOut = 0;
+
+      peers.forEach((peer, idx) => {
+        if (!peer.isRemoved) {
+          if (peer.inRadar) countActive++; else countOut++;
+        }
+
+        const cardContent = `
+          <div class="peer-card ${peer.isRemoved ? 'removed' : ''}" id="peerCard-${peer.id}">
+            <div class="peer-top-row" onclick="openPersonPreview(${idx})">
+              <div class="peer-avatar-wrap">
+                <img src="${peer.avatar}" alt="${peer.name}" class="peer-avatar-img">
+                <span class="peer-online-dot ${peer.inRadar ? '' : 'offline'}"></span>
+              </div>
+              <div class="peer-info-col">
+                <div class="peer-name-line">
+                  <span class="peer-name">${peer.name}, ${peer.age}</span>
+                  <span class="peer-distance-badge ${peer.badgeClass}">
+                    ${peer.inRadar ? peer.distanceBadge : 'Out of radar • Saved'}
+                  </span>
+                </div>
+                <div class="peer-privacy-row">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span>Instagram hidden</span>
+                </div>
+                <p class="peer-bio-text">${peer.bio}</p>
+                <div class="peer-tags-row">
+                  ${peer.tags.map(t => `<span class="peer-tag">${t}</span>`).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="peer-action-row">
+              <button class="btn-card-skip" onclick="skipPeer(${idx})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Skip
+              </button>
+              <button class="btn-card-connect ${peer.isRequested ? 'sent' : ''}" onclick="connectPeer(${idx})">
+                ${peer.isRequested ? 'Requested ✓' : `
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  Connect
+                `}
+              </button>
+            </div>
+          </div>
+        `;
+
+        if (peer.inRadar && !peer.isRemoved) {
+          radarHtml += cardContent;
+        }
+        if (!peer.isRemoved) {
+          discoveredHtml += cardContent;
+        }
+      });
+
+      const activeRadarPeers = peers.filter(p => p.inRadar && !p.isRemoved);
+      renderDynamicRadarPins(activeRadarPeers);
+
+      if (countActive === 0) {
+        radarFeed.innerHTML = `
+          <div class="radar-empty-scan-state">
+            <div class="empty-radar-beacon">
+              <span class="beacon-wave"></span>
+              <span class="beacon-wave w2"></span>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </div>
+            <h4>Looking for nearby Sync peers</h4>
+            <p>Profiles only appear when another Sync user enters your physical proximity. Bluetooth LE scanning active.</p>
+            <button type="button" class="btn-simulate-detect" onclick="simulateNewNearbyPeer()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Simulate Device Detected Nearby
+            </button>
+          </div>
+        `;
+        document.getElementById('radarSummaryCount').innerText = 'Scanning nearby frequencies...';
+        const subcap = document.querySelector('.radar-subcaption');
+        if (subcap) subcap.innerText = 'Profiles appear only when a device is detected nearby';
+      } else {
+        radarFeed.innerHTML = radarHtml;
+        document.getElementById('radarSummaryCount').innerText = `${countActive} ${countActive === 1 ? 'person' : 'people'} in radar`;
+        const subcap = document.querySelector('.radar-subcaption');
+        if (subcap) subcap.innerText = 'Profiles persist in your feed even when out of range';
+      }
+
+      discoveredFeed.innerHTML = discoveredHtml;
+      document.getElementById('radarNearbyCount').innerText = `${countActive} active`;
+      document.getElementById('countAll').innerText = peers.filter(p => !p.isRemoved).length;
+      document.getElementById('countInRadar').innerText = countActive;
+      document.getElementById('countOutRadar').innerText = countOut;
+    }
+
+    // ACTIONS
+    function skipPeer(idx) {
+      const p = peers[idx];
+      p.isRemoved = true;
+      showToast(`Dismissed ${p.name}`);
+      renderPeerCards();
+    }
+
+    function connectPeer(idx) {
+      const p = peers[idx];
+      p.isRequested = true;
+      showToast(`Connection request sent to ${p.name}`);
+      renderPeerCards();
+
+      setTimeout(() => {
+        openMutualMatchModal(p);
+      }, 1400);
+    }
+
+    // PERSON PREVIEW MODAL
+    function openPersonPreview(idx) {
+      const p = peers[idx];
+      selectedModalPeer = p;
+
+      document.getElementById('modalPreviewAvatar').src = p.avatar;
+      document.getElementById('modalPreviewName').innerText = `${p.name}, ${p.age}`;
+      document.getElementById('modalPreviewBadge').innerText = p.inRadar ? `${p.distanceBadge} (${p.distanceMeters})` : 'Out of radar • Saved';
+      document.getElementById('modalPreviewBio').innerText = p.bio;
+
+      const connectBtn = document.getElementById('modalConnectBtn');
+      if (p.isRequested) {
+        connectBtn.innerText = 'Request Sent ✓';
+        connectBtn.disabled = true;
+      } else {
+        connectBtn.innerHTML = `Send Request <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
+        connectBtn.disabled = false;
+      }
+
+      document.getElementById('personPreviewModal').classList.add('active');
+    }
+
+    function skipCurrentModalPeer() {
+      if (selectedModalPeer) {
+        selectedModalPeer.isRemoved = true;
+        closeModal('personPreviewModal');
+        showToast(`Dismissed ${selectedModalPeer.name}`);
+        renderPeerCards();
+      }
+    }
+
+    function connectCurrentModalPeer() {
+      if (selectedModalPeer) {
+        selectedModalPeer.isRequested = true;
+        closeModal('personPreviewModal');
+        showToast(`Connection request sent to ${selectedModalPeer.name}`);
+        renderPeerCards();
+
+        setTimeout(() => {
+          openMutualMatchModal(selectedModalPeer);
+        }, 1200);
+      }
+    }
+
+    // S17 MUTUAL REVEAL - ZERO LOVE SYMBOLS, USES SYNC LOGO
+    function openMutualMatchModal(peer) {
+      document.getElementById('celPeerAvatar').src = peer.avatar;
+      document.getElementById('celPeerName').innerText = peer.name;
+      document.getElementById('celInstagramHandle').innerText = `@${peer.instagram}`;
+      document.getElementById('celInstagramLink').href = `https://instagram.com/${peer.instagram}`;
+      document.getElementById('mutualMatchModal').classList.add('active');
+    }
+
+    function closeMutualModal() {
+      closeModal('mutualMatchModal');
+      switchMainTab('discovered');
+    }
+
+    function acceptRequest(idx) {
+      const p = peers[idx];
+      document.getElementById('incomingRequestHero').style.display = 'none';
+      openMutualMatchModal(p);
+    }
+
+    function declineRequest(idx) {
+      document.getElementById('incomingRequestHero').style.display = 'none';
+      showToast('Connection request declined');
+    }
+
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    function closeModalOnBackdrop(e, id) {
+      if (e.target.id === id) {
+        closeModal(id);
+      }
+    }
+
+    // POWER MODE
+    function setPowerMode(mode, btn) {
+      document.querySelectorAll('.mode-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const radarLabel = document.getElementById('topRadarLabel');
+      if (mode === 'off') {
+        radarLabel.innerText = 'Radar off';
+        radarLabel.style.color = 'var(--muted)';
+        showToast('Proximity radar suspended');
+      } else if (mode === 'smart') {
+        radarLabel.innerText = 'Radar active';
+        radarLabel.style.color = 'var(--green)';
+        showToast('Smart scan mode active (0-25m)');
+      } else if (mode === 'extended') {
+        radarLabel.innerText = 'Extended (70m)';
+        radarLabel.style.color = 'var(--accent)';
+        showToast('Extended range active (up to 70m)');
+      }
+    }
+
+    // FILTERS
+    function setDiscoveredFilter(filterKey, btn) {
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+
+      const cards = document.querySelectorAll('#discoveredFeedList .peer-card');
+      const validPeers = peers.filter(p => !p.isRemoved);
+
+      cards.forEach((card, index) => {
+        const peer = validPeers[index];
+        if (!peer) return;
+
+        if (filterKey === 'all') {
+          card.style.display = 'flex';
+        } else if (filterKey === 'in-radar') {
+          card.style.display = peer.inRadar ? 'flex' : 'none';
+        } else if (filterKey === 'out-of-radar') {
+          card.style.display = !peer.inRadar ? 'flex' : 'none';
+        } else if (filterKey === 'requests') {
+          card.style.display = peer.isRequested ? 'flex' : 'none';
+        }
+      });
+    }
+
+    function handleSearchFilter(query) {
+      const q = query.toLowerCase().trim();
+      const cards = document.querySelectorAll('#discoveredFeedList .peer-card');
+      const validPeers = peers.filter(p => !p.isRemoved);
+
+      cards.forEach((card, index) => {
+        const peer = validPeers[index];
+        if (!peer) return;
+        const matches = peer.name.toLowerCase().includes(q) || peer.bio.toLowerCase().includes(q);
+        card.style.display = matches ? 'flex' : 'none';
+      });
+    }
+
+    // THEME SWITCHER
+    function toggleAppTheme(forceDark = null) {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const isDark = forceDark !== null ? forceDark : (current === 'light');
+      const newTheme = isDark ? 'dark' : 'light';
+      html.setAttribute('data-theme', newTheme);
+
+      const btn = document.getElementById('themeToggleBtn');
+      const settingToggle = document.getElementById('settingsDarkToggle');
+
+      if (isDark) {
+        btn.innerHTML = '☀️ Light Mode';
+        if (settingToggle) settingToggle.checked = true;
+      } else {
+        btn.innerHTML = '🌙 Dark Mode';
+        if (settingToggle) settingToggle.checked = false;
+      }
+    }
+
+    function toggleGhostMode(checked) {
+      showToast(checked ? 'Ghost Mode active: Broadcasting paused' : 'Ghost Mode disabled: Broadcasting active');
+    }
+
+    // TOAST
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById('appToast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.add('visible');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+      }, 2600);
+    }
+
+    // SIMULATION
+    
+    function toggleRadarDetection() {
+      const anyInRadar = peers.some(p => p.inRadar && !p.isRemoved);
+      if (anyInRadar) {
+        peers.forEach(p => p.inRadar = false);
+        showToast("All devices left radar range (Testing empty scan state)");
+      } else {
+        peers[0].inRadar = true;
+        peers[1].inRadar = true;
+        showToast("⚡ 2 nearby devices detected via Bluetooth LE");
+      }
+      renderPeerCards();
+    }
+
+    function simulateNewNearbyPeer() {
+      const newPeer = {
+        id: Date.now(),
+        name: "Kavya Nair",
+        age: 22,
+        username: "kavya_nair",
+        instagram: "kavya.nair",
+        avatar: "assets/portraits/portrait_01.jpg",
+        bio: "Architecture student & film photography explorer",
+        distanceBadge: "Very Close",
+        badgeClass: "badge-close",
+        distanceMeters: "4m",
+        tags: ["Design", "Architecture", "Film"],
+        inRadar: true,
+        isRequested: false
+      };
+
+      peers.unshift(newPeer);
+      renderPeerCards();
+      showToast(`⚡ Discovered ${newPeer.name} nearby!`);
+      navigateToScreen('main', 'radar');
+    }
+
+    function simulateIncomingRequest() {
+      const reqHero = document.getElementById('incomingRequestHero');
+      reqHero.style.display = 'block';
+      showToast('📩 You received a new connection request!');
+      navigateToScreen('main', 'discovered');
+    }
+
+    function resetDemo() {
+      peers = initialPeers.map(p => ({...p, isRemoved: false, isRequested: false}));
+      renderPeerCards();
+      navigateToScreen('splash');
+      showToast('Demo reset to initial onboarding');
+    }
+  
+function triggerPhotoUpload() {
+  document.getElementById('photoFileInput').click();
+}
+
+function handlePhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const dataUrl = evt.target.result;
+    const img = document.getElementById('currentAvatarImg');
+    const placeholder = document.getElementById('avatarPlaceholderIcon');
+    img.src = dataUrl;
+    img.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    currentAvatar = dataUrl;
+    
+    // Upload to local FastAPI backend
+    fetch('http://localhost:8000/api/v1/users/upload-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_base64: dataUrl, filename: file.name })
+    }).then(r => r.json()).then(data => {
+      if (data.photo_url) {
+        currentAvatar = 'http://localhost:8000' + data.photo_url;
+      }
+    }).catch(err => console.log('Local fallback avatar'));
+  };
+  reader.readAsDataURL(file);
+}
+
+</script>
+</body>
+</html>
