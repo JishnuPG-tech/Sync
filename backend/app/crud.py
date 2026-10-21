@@ -109,50 +109,53 @@ def get_nearby_active_users(
     max_age_minutes: int = 10
 ) -> List[NearbyUserCard]:
     """
-    Finds active nearby peers within radius.
+    Finds active nearby peers.
+    1. If GPS coordinates exist, calculates haversine distance.
+    2. If no GPS coordinate pinged yet, shows active registered peers so users immediately see each other!
     CRITICAL: Never returns instagram_username!
     """
     supabase = get_supabase()
 
-    # Get current user's location
+    # Get current user's location if available
     curr_res = supabase.table("user_locations").select("*").eq("user_id", current_user_id).limit(1).execute()
-    if not curr_res.data:
-        return []
+    curr_loc = curr_res.data[0] if curr_res.data else None
 
-    curr_loc = curr_res.data[0]
-    cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
-
-    # Fetch active user locations
-    locs_res = supabase.table("user_locations").select("*, users(*)").gte("updated_at", cutoff_time).execute()
+    # Fetch all active discovery users except self
+    users_res = supabase.table("users").select("*").neq("id", current_user_id).eq("is_discovery_active", True).execute()
+    all_users = users_res.data or []
 
     nearby_cards: List[NearbyUserCard] = []
 
-    for entry in locs_res.data or []:
-        user = entry.get("users")
-        if not user or user.get("id") == current_user_id or not user.get("is_discovery_active", True):
-            continue
+    for user in all_users:
+        conn_status = get_connection_status(current_user_id, user["id"])
+        interests = [i.strip() for i in user.get("interests_csv", "").split(",") if i.strip()]
 
-        distance = haversine_distance_meters(
-            curr_loc["latitude"], curr_loc["longitude"],
-            entry["latitude"], entry["longitude"]
-        )
-
-        if distance <= max_distance_meters:
-            conn_status = get_connection_status(current_user_id, user["id"])
-            interests = [i.strip() for i in user.get("interests_csv", "").split(",") if i.strip()]
-
-            nearby_cards.append(
-                NearbyUserCard(
-                    user_id=user["id"],
-                    display_name=user["display_name"],
-                    bio=user.get("bio", ""),
-                    location=user.get("location_name", ""),
-                    avatar_url=user.get("avatar_url"),
-                    interests=interests,
-                    approx_distance_meters=round(distance, 1),
-                    connection_status=conn_status
+        dist = 0.0
+        if curr_loc:
+            # Check partner's location
+            partner_loc_res = supabase.table("user_locations").select("*").eq("user_id", user["id"]).limit(1).execute()
+            if partner_loc_res.data:
+                partner_loc = partner_loc_res.data[0]
+                dist = haversine_distance_meters(
+                    curr_loc["latitude"], curr_loc["longitude"],
+                    partner_loc["latitude"], partner_loc["longitude"]
                 )
+                if dist > max_distance_meters:
+                    continue
+                dist = round(dist, 1)
+
+        nearby_cards.append(
+            NearbyUserCard(
+                user_id=user["id"],
+                display_name=user["display_name"],
+                bio=user.get("bio", ""),
+                location=user.get("location_name", ""),
+                avatar_url=user.get("avatar_url"),
+                interests=interests if interests else ["Nearby"],
+                approx_distance_meters=dist,
+                connection_status=conn_status
             )
+        )
 
     nearby_cards.sort(key=lambda x: x.approx_distance_meters)
     return nearby_cards
