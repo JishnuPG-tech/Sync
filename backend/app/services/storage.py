@@ -23,6 +23,7 @@ async def upload_photo_to_supabase(image_bytes: bytes, filename: str) -> str:
 
     headers = {
         "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+        "apikey": settings.SUPABASE_SERVICE_KEY,
         "Content-Type": "image/jpeg",
         "x-upsert": "true",
     }
