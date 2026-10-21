@@ -106,8 +106,8 @@ def update_user_location(user_id: str, latitude: float, longitude: float) -> Dic
 
 def get_nearby_active_users(
     current_user_id: str,
-    max_distance_meters: float = 40.0,
-    max_age_minutes: int = 10
+    max_distance_meters: float = 70.0,
+    max_age_minutes: int = 15
 ) -> List[NearbyUserCard]:
     """
     Finds active nearby peers.

@@ -47,8 +47,19 @@ object UserSession {
     fun getUserId(context: Context): String? =
         getPrefs(context).getString(KEY_USER_ID, null)
 
-    fun getBleToken(context: Context): String =
-        getPrefs(context).getString(KEY_BLE_TOKEN, null) ?: getUserId(context) ?: ""
+    fun getBleToken(context: Context): String {
+        var token = getPrefs(context).getString(KEY_BLE_TOKEN, null)
+        if (token.isNullOrBlank()) {
+            val uid = getUserId(context)
+            token = if (!uid.isNullOrBlank() && uid.length == 36 && uid.count { it == '-' } == 4) {
+                uid
+            } else {
+                java.util.UUID.randomUUID().toString()
+            }
+            getPrefs(context).edit().putString(KEY_BLE_TOKEN, token).apply()
+        }
+        return token
+    }
 
     fun getDisplayName(context: Context): String =
         getPrefs(context).getString(KEY_DISPLAY_NAME, "") ?: ""

@@ -20,6 +20,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,8 +107,10 @@ class MainActivity : ComponentActivity() {
             var powerMode by remember { mutableStateOf<RadarPowerMode>(RadarPowerMode.SMART_DISCOVERY) }
             var currentTab by remember { mutableStateOf(AuraTab.RADAR) }
 
-            // Real data collections loaded from backend (NO hardcoded fake peers or requests)
+            // Real data collections (NO hardcoded fake peers or requests)
             val nearbyPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
+            val blePeersMap = remember { mutableStateMapOf<String, NearbyPeerUiModel>() }
+            val gpsPeersMap = remember { mutableStateMapOf<String, NearbyPeerUiModel>() }
             val discoveredPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
             val requestedPeerIds = remember { mutableStateListOf<String>() }
             val incomingRequests = remember { mutableStateListOf<ConnectionRequestIncoming>() }
@@ -115,6 +118,43 @@ class MainActivity : ComponentActivity() {
 
             val apiClient = remember { SyncApiClient() }
             val coroutineScope = rememberCoroutineScope()
+
+            // Merge BLE (real radio signals) and GPS (real physical distance) without clobbering each other
+            fun updateCombinedPeers() {
+                if (powerMode == RadarPowerMode.OFF) {
+                    nearbyPeers.clear()
+                    return
+                }
+                val combined = mutableListOf<NearbyPeerUiModel>()
+                val seenIds = mutableSetOf<String>()
+
+                // 1. Direct BLE radio sightings take top priority
+                blePeersMap.values.forEach { peer ->
+                    combined.add(peer)
+                    seenIds.add(peer.encounterId)
+                }
+
+                // 2. Real GPS proximity sightings (< 70m)
+                gpsPeersMap.values.forEach { peer ->
+                    if (!seenIds.contains(peer.encounterId)) {
+                        combined.add(peer)
+                        seenIds.add(peer.encounterId)
+                    }
+                }
+
+                nearbyPeers.clear()
+                nearbyPeers.addAll(combined)
+
+                // Accumulate into persistent discovered list (never deleted when radar pauses)
+                combined.forEach { peer ->
+                    val existingIdx = discoveredPeers.indexOfFirst { it.encounterId == peer.encounterId }
+                    if (existingIdx >= 0) {
+                        discoveredPeers[existingIdx] = peer
+                    } else {
+                        discoveredPeers.add(0, peer)
+                    }
+                }
+            }
 
             val proximityEvaluator = remember { ProximityEvaluator() }
             val bleManager = remember {
@@ -125,7 +165,7 @@ class MainActivity : ComponentActivity() {
                         val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
                         if (resolveRes.isSuccess) {
                             val peerCard = resolveRes.getOrNull()
-                            if (peerCard != null) {
+                            if (peerCard != null && peerCard.userId != currentUserId) {
                                 val distDisplay = when (observation.proximityTier) {
                                     ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
                                     ProximityTier.NEARBY -> "Nearby • ~5m"
@@ -140,52 +180,84 @@ class MainActivity : ComponentActivity() {
                                     isCurrentlyInRange = true,
                                     confidenceTier = observation.proximityTier
                                 )
-                                val existingIdx = nearbyPeers.indexOfFirst { it.encounterId == peerUi.encounterId }
-                                if (existingIdx >= 0) {
-                                    nearbyPeers[existingIdx] = peerUi
-                                } else {
-                                    nearbyPeers.add(0, peerUi)
-                                }
-                                val discIdx = discoveredPeers.indexOfFirst { it.encounterId == peerUi.encounterId }
-                                if (discIdx >= 0) {
-                                    discoveredPeers[discIdx] = peerUi
-                                } else {
-                                    discoveredPeers.add(0, peerUi)
-                                }
+                                blePeersMap[peerCard.userId] = peerUi
+                                updateCombinedPeers()
                             }
                         }
                     }
                 }
             }
 
-            // Real physical GPS location updater
-            fun updatePhysicalLocation() {
-                try {
-                    val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                    if (locationManager != null && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        val loc: Location? = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                            ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                        loc?.let {
-                            if (currentUserId.isNotBlank()) {
+            // Real physical continuous GPS location listener
+            val locationListener = remember {
+                object : android.location.LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        if (currentUserId.isNotBlank()) {
+                            coroutineScope.launch {
+                                apiClient.pingLocation(currentUserId, location.latitude, location.longitude)
+                            }
+                        }
+                    }
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                    override fun onProviderEnabled(provider: String) {}
+                    override fun onProviderDisabled(provider: String) {}
+                }
+            }
+
+            // Manage hardware BLE radios & live GPS listener based on powerMode
+            DisposableEffect(powerMode, currentUserId) {
+                val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                val hasFineLocation = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val hasCoarseLocation = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+                if (powerMode != RadarPowerMode.OFF && currentUserId.isNotBlank()) {
+                    val tokenToAdvertise = UserSession.getBleToken(this@MainActivity)
+                    bleManager.setPowerMode(powerMode, tokenToAdvertise)
+
+                    if (locationManager != null && (hasFineLocation || hasCoarseLocation)) {
+                        // 1. Ping initial cached fix if available
+                        try {
+                            val last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                            last?.let {
                                 coroutineScope.launch {
                                     apiClient.pingLocation(currentUserId, it.latitude, it.longitude)
                                 }
                             }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
+                        } catch (_: Exception) {}
 
-            // Control BLE hardware radio state & GPS ping based on radar powerMode
-            LaunchedEffect(powerMode, currentUserId) {
-                if (currentUserId.isNotBlank()) {
-                    val tokenToAdvertise = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
-                    bleManager.setPowerMode(powerMode, tokenToAdvertise)
-                    if (powerMode != RadarPowerMode.OFF) {
-                        updatePhysicalLocation()
+                        // 2. Request active continuous updates
+                        try {
+                            locationManager.requestLocationUpdates(
+                                LocationManager.GPS_PROVIDER,
+                                5000L,
+                                2f,
+                                locationListener
+                            )
+                        } catch (_: Exception) {}
+                        try {
+                            locationManager.requestLocationUpdates(
+                                LocationManager.NETWORK_PROVIDER,
+                                5000L,
+                                2f,
+                                locationListener
+                            )
+                        } catch (_: Exception) {}
                     }
                 } else {
                     bleManager.setPowerMode(RadarPowerMode.OFF, "")
+                    blePeersMap.clear()
+                    gpsPeersMap.clear()
+                    updateCombinedPeers()
+                    try {
+                        locationManager?.removeUpdates(locationListener)
+                    } catch (_: Exception) {}
+                }
+
+                onDispose {
+                    try {
+                        locationManager?.removeUpdates(locationListener)
+                    } catch (_: Exception) {}
                 }
             }
 
@@ -193,23 +265,17 @@ class MainActivity : ComponentActivity() {
             fun fetchBackendData() {
                 if (currentUserId.isBlank()) return
                 coroutineScope.launch {
-                    // 1. Fetch nearby peers from backend
+                    // 1. Fetch nearby peers from backend (strict real GPS haversine distance)
                     val peersRes = apiClient.getNearbyPeers(currentUserId)
                     if (peersRes.isSuccess) {
                         val peers = peersRes.getOrNull() ?: emptyList()
-                        nearbyPeers.clear()
-                        if (powerMode != RadarPowerMode.OFF) {
-                            nearbyPeers.addAll(peers)
-                        }
-                        // Accumulate into persistent discovered list (never deleted when radar pauses)
+                        gpsPeersMap.clear()
                         peers.forEach { peer ->
-                            val existingIdx = discoveredPeers.indexOfFirst { it.encounterId == peer.encounterId }
-                            if (existingIdx >= 0) {
-                                discoveredPeers[existingIdx] = peer
-                            } else {
-                                discoveredPeers.add(0, peer)
+                            if (peer.encounterId != currentUserId) {
+                                gpsPeersMap[peer.encounterId] = peer
                             }
                         }
+                        updateCombinedPeers()
                     }
 
                     // 2. Fetch pending requests
@@ -230,7 +296,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Sync with backend: fetch immediately on launch or powerMode change, poll every 5s when radar active
+            // Sync with backend: poll every 5s when radar active
             LaunchedEffect(navState, currentUserId, powerMode) {
                 if (navState == AppNavState.MAIN && currentUserId.isNotBlank()) {
                     fetchBackendData()
@@ -362,14 +428,6 @@ class MainActivity : ComponentActivity() {
                                                 powerMode = powerMode,
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
-                                                    if (newMode == RadarPowerMode.OFF) {
-                                                        bleManager.setPowerMode(RadarPowerMode.OFF, "")
-                                                        nearbyPeers.clear()
-                                                    } else {
-                                                        val token = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
-                                                        bleManager.setPowerMode(newMode, token)
-                                                        updatePhysicalLocation()
-                                                    }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {
                                                             apiClient.toggleDiscovery(currentUserId, newMode != RadarPowerMode.OFF)
@@ -457,14 +515,6 @@ class MainActivity : ComponentActivity() {
                                                 powerMode = powerMode,
                                                 onPowerModeChanged = { newMode ->
                                                     powerMode = newMode
-                                                    if (newMode == RadarPowerMode.OFF) {
-                                                        bleManager.setPowerMode(RadarPowerMode.OFF, "")
-                                                        nearbyPeers.clear()
-                                                    } else {
-                                                        val token = UserSession.getBleToken(this@MainActivity).ifBlank { currentUserId }
-                                                        bleManager.setPowerMode(newMode, token)
-                                                        updatePhysicalLocation()
-                                                    }
                                                     if (currentUserId.isNotBlank()) {
                                                         coroutineScope.launch {
                                                             apiClient.toggleDiscovery(currentUserId, newMode != RadarPowerMode.OFF)

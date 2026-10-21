@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: Optional[str] = os.getenv("SUPABASE_SERVICE_KEY", None)
     SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "avatars")
 
-    # Proximity threshold in meters (e.g., within 40m = same room / building zone)
-    PROXIMITY_RADIUS_METERS: float = 40.0
+    # Proximity threshold in meters (e.g., within 70m for extended radar)
+    PROXIMITY_RADIUS_METERS: float = 70.0
 
     # Maximum age for active location to be considered 'nearby' (in minutes)
     LOCATION_STALE_MINUTES: int = 10

@@ -49,15 +49,12 @@ class BleDiscoveryManager(
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             result?.let {
                 val scanRecord = it.scanRecord ?: return
-                val serviceData = scanRecord.getServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID))
-                val rawToken = if (serviceData != null) {
-                    bytesToUuidString(serviceData)
-                } else {
-                    it.device.address ?: "unknown"
-                }
+                val serviceData = scanRecord.getServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID)) ?: return
+                val rawToken = bytesToUuidString(serviceData)
+                Log.i(TAG, "Sync BLE Packet Detected! Peer: $rawToken, RSSI: ${it.rssi}")
 
                 val observation = proximityEvaluator.recordObservation(rawToken, it.rssi)
-                if (observation != null && observation.isConfident) {
+                if (observation != null) {
                     onDeviceDiscovered(observation)
                 }
             }
@@ -137,16 +134,12 @@ class BleDiscoveryManager(
 
         when (mode) {
             RadarPowerMode.SMART_DISCOVERY -> {
-                startBalancedAdvertising(tokenBytes)
+                startHighPowerLegacyAdvertising(tokenBytes)
                 startConfiguredScan(false)
             }
             RadarPowerMode.EXTENDED_RANGE -> {
-                if (hasBt5Hardware && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startTrueLongRangeAdvertising(tokenBytes)
-                } else {
-                    startHighPowerLegacyAdvertising(tokenBytes)
-                }
-                startConfiguredScan(hasBt5Hardware)
+                startHighPowerLegacyAdvertising(tokenBytes)
+                startConfiguredScan(true)
             }
             RadarPowerMode.OFF -> {}
         }
@@ -279,7 +272,7 @@ class BleDiscoveryManager(
     }
 
     /**
-     * Tier 3: Universal Legacy High-Power Advertising
+     * Universal High-Power Advertising on standard 1M PHY (100% compatible across all Android devices)
      */
     @SuppressLint("MissingPermission")
     private fun startHighPowerLegacyAdvertising(tokenBytes: ByteArray) {
@@ -288,9 +281,10 @@ class BleDiscoveryManager(
 
         try {
             val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
                 .setConnectable(false)
+                .setTimeout(0)
                 .build()
 
             val data = AdvertiseData.Builder()
@@ -300,7 +294,7 @@ class BleDiscoveryManager(
                 .build()
 
             advertiser?.startAdvertising(settings, data, legacyAdvertiseCallback)
-            Log.i(TAG, "Tier 3 Active: Legacy High-Power BLE Advertising")
+            Log.i(TAG, "Universal High-Power BLE Advertising started")
         } catch (e: SecurityException) {
             Log.e(TAG, "Bluetooth permission missing; aborting advertising", e)
             advState = AdvState.IDLE
@@ -311,60 +305,18 @@ class BleDiscoveryManager(
     }
 
     @SuppressLint("MissingPermission")
-    private fun startBalancedAdvertising(tokenBytes: ByteArray) {
-        advState = AdvState.STARTING_TIER_3
-        try {
-            val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
-                .setConnectable(false)
-                .build()
-
-            val data = AdvertiseData.Builder()
-                .addServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID), tokenBytes)
-                .setIncludeDeviceName(false)
-                .setIncludeTxPowerLevel(false)
-                .build()
-
-            advertiser?.startAdvertising(settings, data, legacyAdvertiseCallback)
-        } catch (e: Exception) {
-            Log.e(TAG, "Balanced advertising failed to start", e)
-            advState = AdvState.IDLE
-        }
-    }
-
-    @SuppressLint("MissingPermission")
     private fun startConfiguredScan(hasBt5Hardware: Boolean) {
-        val filters = listOf(
-            ScanFilter.Builder().setServiceData(ParcelUuid(GHOSTMESH_SERVICE_UUID), null).build(),
-            ScanFilter.Builder().setServiceUuid(ParcelUuid(GHOSTMESH_SERVICE_UUID)).build()
-        )
-
-        val scanSettingsBuilder = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setReportDelay(0)
-
-        if (hasBt5Hardware && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                scanSettingsBuilder.setLegacy(false)
-                scanSettingsBuilder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
-                scanner?.startScan(filters, scanSettingsBuilder.build(), scanCallback)
-                Log.i(TAG, "BLE Scanner active with PHY_LE_ALL_SUPPORTED")
-                return
-            } catch (e: IllegalArgumentException) {
-                Log.w(TAG, "Extended scan settings rejected (${e.message}). Falling back to legacy scanner...")
-            }
-        }
+            .build()
 
         try {
-            val legacySettings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-                .setReportDelay(0)
-                .build()
-            scanner?.startScan(filters, legacySettings, scanCallback)
-            Log.i(TAG, "BLE Scanner active with Legacy ScanSettings")
+            // Software-filtered scan: passing emptyList() avoids hardware HAL filter bugs across OEMs
+            scanner?.startScan(emptyList(), scanSettings, scanCallback)
+            Log.i(TAG, "BLE Scanner active with LOW_LATENCY (Universal software filtering)")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start legacy BLE scanner", e)
+            Log.e(TAG, "Failed to start BLE scanner", e)
         }
     }
 
