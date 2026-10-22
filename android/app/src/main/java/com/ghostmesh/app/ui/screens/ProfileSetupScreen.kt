@@ -738,27 +738,9 @@ fun ProfileSetupScreen(
                                 avatarToSave
                             )
                         } else {
-                            // If user is already registered on backend or network fallback, save locally and proceed
-                            val fallbackId = UserSession.getUserId(context) ?: "user_${syncUsername}_${System.currentTimeMillis()}"
-                            UserSession.saveUser(
-                                context = context,
-                                userId = fallbackId,
-                                displayName = displayName,
-                                syncUsername = syncUsername,
-                                instagramUsername = instagramHandle,
-                                bio = bio,
-                                location = locationInput,
-                                avatar = avatarToSave
-                            )
-                            onProfileCreated(
-                                fallbackId,
-                                displayName,
-                                syncUsername,
-                                instagramHandle,
-                                bio,
-                                locationInput,
-                                avatarToSave
-                            )
+                            // Server registration failed - show visible error to user so they never enter with an unresolvable identity
+                            submissionError = result.exceptionOrNull()?.message 
+                                ?: "Failed to connect to Sync servers. Please check your internet connection and try again."
                         }
                         isSubmitting = false
                     }

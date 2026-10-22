@@ -51,14 +51,15 @@ object UserSession {
         var token = getPrefs(context).getString(KEY_BLE_TOKEN, null)
         if (token.isNullOrBlank()) {
             val uid = getUserId(context)
-            token = if (!uid.isNullOrBlank() && uid.length == 36 && uid.count { it == '-' } == 4) {
-                uid
+            token = if (!uid.isNullOrBlank()) {
+                uid.replace("-", "").take(16).lowercase()
             } else {
-                java.util.UUID.randomUUID().toString()
+                java.util.UUID.randomUUID().toString().replace("-", "").take(16).lowercase()
             }
             getPrefs(context).edit().putString(KEY_BLE_TOKEN, token).apply()
         }
-        return token
+        // Normalize to standard 16-character hex token (8 bytes for compact BLE payload)
+        return token.replace("-", "").take(16).lowercase()
     }
 
     fun getDisplayName(context: Context): String =

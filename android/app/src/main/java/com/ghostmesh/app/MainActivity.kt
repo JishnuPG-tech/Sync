@@ -1,12 +1,17 @@
 package com.ghostmesh.app
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -51,6 +56,7 @@ import com.ghostmesh.app.ui.screens.WelcomeScreen
 import com.ghostmesh.app.ui.theme.PlexTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 enum class AppNavState {
     SPLASH,
@@ -62,16 +68,32 @@ enum class AppNavState {
 
 class MainActivity : ComponentActivity() {
 
+    private var onPermissionsUpdated: (() -> Unit)? = null
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        // BLE & location permissions handled
+        onPermissionsUpdated?.invoke()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Request modern Android permissions
+        fun checkBtPerms(): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
+
+        fun checkLocPerms(): Boolean {
+            return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                   checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        }
+
+        // Request modern Android permissions on launch
         val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -90,11 +112,99 @@ class MainActivity : ComponentActivity() {
             var currentThemePreset by remember { mutableStateOf(ThemePreset.CLAUDE_WARM) }
             var appearanceMode by remember { mutableStateOf(AppearanceMode.LIGHT) }
 
+            // Hardware & Permission state tracking
+            var isBluetoothEnabled by remember {
+                mutableStateOf(BluetoothAdapter.getDefaultAdapter()?.isEnabled == true)
+            }
+            val locManager = remember { getSystemService(Context.LOCATION_SERVICE) as? LocationManager }
+            var isLocationEnabled by remember {
+                mutableStateOf(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        locManager?.isLocationEnabled == true
+                    } else {
+                        locManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true ||
+                        locManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true
+                    }
+                )
+            }
+            var hasBluetoothPermission by remember { mutableStateOf(checkBtPerms()) }
+            var hasLocationPermission by remember { mutableStateOf(checkLocPerms()) }
+
+            // Dynamic listener for Bluetooth/Location state toggles & permission grants
+            DisposableEffect(Unit) {
+                onPermissionsUpdated = {
+                    hasBluetoothPermission = checkBtPerms()
+                    hasLocationPermission = checkLocPerms()
+                }
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        when (intent?.action) {
+                            BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                                isBluetoothEnabled = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+                            }
+                            LocationManager.PROVIDERS_CHANGED_ACTION -> {
+                                isLocationEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    locManager?.isLocationEnabled == true
+                                } else {
+                                    locManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true ||
+                                    locManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true
+                                }
+                            }
+                        }
+                    }
+                }
+                val filter = IntentFilter().apply {
+                    addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+                    addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
+                }
+                registerReceiver(receiver, filter)
+
+                onDispose {
+                    onPermissionsUpdated = null
+                    try {
+                        unregisterReceiver(receiver)
+                    } catch (_: Exception) {}
+                }
+            }
+
+            val enableBluetooth = {
+                try {
+                    val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                    startActivity(intent)
+                } catch (_: Exception) {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                    } catch (_: Exception) {}
+                }
+            }
+
+            val enableLocation = {
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                } catch (_: Exception) {}
+            }
+
+            val requestAllPermissions = {
+                val perms = mutableListOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    perms.add(Manifest.permission.BLUETOOTH_SCAN)
+                    perms.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+                    perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    perms.add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                permissionLauncher.launch(perms.toTypedArray())
+            }
+
             // App Navigation State - if already registered, start at MAIN, otherwise SPLASH
             val isInitiallyRegistered = remember { UserSession.isRegistered(this@MainActivity) }
             var navState by remember { mutableStateOf(if (isInitiallyRegistered) AppNavState.MAIN else AppNavState.SPLASH) }
 
-            // User Identity State - loaded from persistent session (empty if new user, NO hardcoded mock data)
+            // User Identity State - loaded from persistent session
             var currentUserId by remember { mutableStateOf(UserSession.getUserId(this@MainActivity) ?: "") }
             var currentDisplayName by remember { mutableStateOf(UserSession.getDisplayName(this@MainActivity)) }
             var currentSyncUsername by remember { mutableStateOf(UserSession.getSyncUsername(this@MainActivity)) }
@@ -107,7 +217,7 @@ class MainActivity : ComponentActivity() {
             var powerMode by remember { mutableStateOf<RadarPowerMode>(RadarPowerMode.SMART_DISCOVERY) }
             var currentTab by remember { mutableStateOf(AuraTab.RADAR) }
 
-            // Real data collections (NO hardcoded fake peers or requests)
+            // Collections
             val nearbyPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
             val blePeersMap = remember { mutableStateMapOf<String, NearbyPeerUiModel>() }
             val gpsPeersMap = remember { mutableStateMapOf<String, NearbyPeerUiModel>() }
@@ -157,33 +267,114 @@ class MainActivity : ComponentActivity() {
             }
 
             val proximityEvaluator = remember { ProximityEvaluator() }
+
+            // Profile Resolution Deduplication & Presence Tracking Caches
+            val resolvedProfileCache = remember { ConcurrentHashMap<String, NearbyPeerUiModel>() }
+            val inFlightLookups = remember { ConcurrentHashMap<String, Boolean>() }
+            val failedLookupCooldown = remember { ConcurrentHashMap<String, Long>() }
+            val tokenToUserIdMap = remember { ConcurrentHashMap<String, String>() }
+            val lastSeenMonotonicMap = remember { ConcurrentHashMap<String, Long>() }
+
             val bleManager = remember {
                 BleDiscoveryManager(this@MainActivity, proximityEvaluator) { observation ->
                     if (powerMode == RadarPowerMode.OFF || currentUserId.isBlank()) return@BleDiscoveryManager
                     val rawToken = observation.deviceToken
-                    coroutineScope.launch {
-                        val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
-                        if (resolveRes.isSuccess) {
-                            val peerCard = resolveRes.getOrNull()
-                            if (peerCard != null && peerCard.userId != currentUserId) {
-                                val distDisplay = when (observation.proximityTier) {
-                                    ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
-                                    ProximityTier.NEARBY -> "Nearby • ~5m"
-                                    ProximityTier.EXTENDED -> "Extended • ~15m"
-                                }
-                                val peerUi = NearbyPeerUiModel(
-                                    encounterId = peerCard.userId,
-                                    displayName = peerCard.displayName,
-                                    introduction = peerCard.bio,
-                                    avatarAsset = peerCard.avatarUrl,
-                                    distanceDisplay = distDisplay,
-                                    isCurrentlyInRange = true,
-                                    confidenceTier = observation.proximityTier
-                                )
-                                blePeersMap[peerCard.userId] = peerUi
-                                updateCombinedPeers()
-                            }
+                    val nowElapsed = SystemClock.elapsedRealtime()
+                    lastSeenMonotonicMap[rawToken] = nowElapsed
+
+                    // 1. In-Memory Cache Hit: Update RSSI, distance, and timestamps with ZERO network lookups
+                    val cachedProfile = resolvedProfileCache[rawToken]
+                    if (cachedProfile != null) {
+                        val distDisplay = when (observation.proximityTier) {
+                            ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
+                            ProximityTier.NEARBY -> "Nearby • ~5m"
+                            ProximityTier.EXTENDED -> "Extended • ~15m"
                         }
+                        val updatedUi = cachedProfile.copy(
+                            distanceDisplay = distDisplay,
+                            isCurrentlyInRange = true,
+                            confidenceTier = observation.proximityTier,
+                            lastSeenElapsedMs = nowElapsed
+                        )
+                        blePeersMap[cachedProfile.encounterId] = updatedUi
+                        updateCombinedPeers()
+                        return@BleDiscoveryManager
+                    }
+
+                    // 2. Deduplicate network lookups: verify cooldown & in-flight state
+                    val lastFailed = failedLookupCooldown[rawToken] ?: 0L
+                    if (nowElapsed - lastFailed < 30_000L) {
+                        return@BleDiscoveryManager
+                    }
+                    if (inFlightLookups[rawToken] == true) {
+                        return@BleDiscoveryManager
+                    }
+
+                    inFlightLookups[rawToken] = true
+                    coroutineScope.launch {
+                        try {
+                            val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
+                            if (resolveRes.isSuccess) {
+                                val peerCard = resolveRes.getOrNull()
+                                if (peerCard != null && peerCard.userId != currentUserId) {
+                                    val distDisplay = when (observation.proximityTier) {
+                                        ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
+                                        ProximityTier.NEARBY -> "Nearby • ~5m"
+                                        ProximityTier.EXTENDED -> "Extended • ~15m"
+                                    }
+                                    val peerUi = NearbyPeerUiModel(
+                                        encounterId = peerCard.userId,
+                                        displayName = peerCard.displayName,
+                                        introduction = peerCard.bio,
+                                        avatarAsset = peerCard.avatarUrl,
+                                        distanceDisplay = distDisplay,
+                                        isCurrentlyInRange = true,
+                                        confidenceTier = observation.proximityTier,
+                                        lastSeenElapsedMs = nowElapsed
+                                    )
+                                    resolvedProfileCache[rawToken] = peerUi
+                                    tokenToUserIdMap[rawToken] = peerCard.userId
+                                    blePeersMap[peerCard.userId] = peerUi
+                                    updateCombinedPeers()
+                                }
+                            } else {
+                                failedLookupCooldown[rawToken] = SystemClock.elapsedRealtime()
+                                android.util.Log.w("MainActivity", "Failed to resolve BLE token $rawToken: ${resolveRes.exceptionOrNull()?.message}")
+                            }
+                        } finally {
+                            inFlightLookups.remove(rawToken)
+                        }
+                    }
+                }
+            }
+
+            // Clean up BLE manager resources on dispose
+            DisposableEffect(bleManager) {
+                onDispose {
+                    bleManager.destroy()
+                }
+            }
+
+            // Presence Expiry: Prune departed peers (absence > 15s) every 3 seconds
+            LaunchedEffect(powerMode) {
+                while (powerMode != RadarPowerMode.OFF) {
+                    delay(3_000)
+                    val now = SystemClock.elapsedRealtime()
+                    var changed = false
+                    val iterator = lastSeenMonotonicMap.entries.iterator()
+                    while (iterator.hasNext()) {
+                        val entry = iterator.next()
+                        if (now - entry.value > 15_000L) {
+                            val userId = tokenToUserIdMap[entry.key]
+                            if (userId != null) {
+                                blePeersMap.remove(userId)
+                                changed = true
+                            }
+                            iterator.remove()
+                        }
+                    }
+                    if (changed) {
+                        updateCombinedPeers()
                     }
                 }
             }
@@ -204,59 +395,75 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Manage hardware BLE radios & live GPS listener based on powerMode
-            DisposableEffect(powerMode, currentUserId) {
-                val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                val hasFineLocation = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                val hasCoarseLocation = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
+            // Manage hardware BLE radios & live GPS listener based on powerMode & hardware toggles
+            DisposableEffect(powerMode, currentUserId, isBluetoothEnabled, hasBluetoothPermission, isLocationEnabled, hasLocationPermission) {
                 if (powerMode != RadarPowerMode.OFF && currentUserId.isNotBlank()) {
-                    val tokenToAdvertise = UserSession.getBleToken(this@MainActivity)
-                    bleManager.setPowerMode(powerMode, tokenToAdvertise)
+                    coroutineScope.launch {
+                        apiClient.toggleDiscovery(currentUserId, true)
+                    }
 
-                    if (locationManager != null && (hasFineLocation || hasCoarseLocation)) {
+                    if (isBluetoothEnabled && hasBluetoothPermission) {
+                        val tokenToAdvertise = UserSession.getBleToken(this@MainActivity)
+                        bleManager.setPowerMode(powerMode, tokenToAdvertise)
+                    }
+
+                    if (locManager != null && isLocationEnabled && hasLocationPermission) {
                         // 1. Ping initial cached fix if available
                         try {
-                            val last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                            val last = locManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                                ?: locManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                                ?: locManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
                             last?.let {
                                 coroutineScope.launch {
                                     apiClient.pingLocation(currentUserId, it.latitude, it.longitude)
                                 }
                             }
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainActivity", "Failed to get last known location", e)
+                        }
 
-                        // 2. Request active continuous updates
+                        // 2. Request active continuous updates with Looper.getMainLooper()
                         try {
-                            locationManager.requestLocationUpdates(
+                            locManager.requestLocationUpdates(
                                 LocationManager.GPS_PROVIDER,
                                 5000L,
                                 2f,
-                                locationListener
+                                locationListener,
+                                android.os.Looper.getMainLooper()
                             )
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainActivity", "GPS_PROVIDER unavailable", e)
+                        }
                         try {
-                            locationManager.requestLocationUpdates(
+                            locManager.requestLocationUpdates(
                                 LocationManager.NETWORK_PROVIDER,
                                 5000L,
                                 2f,
-                                locationListener
+                                locationListener,
+                                android.os.Looper.getMainLooper()
                             )
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainActivity", "NETWORK_PROVIDER unavailable", e)
+                        }
                     }
                 } else {
+                    if (currentUserId.isNotBlank()) {
+                        coroutineScope.launch {
+                            apiClient.toggleDiscovery(currentUserId, false)
+                        }
+                    }
                     bleManager.setPowerMode(RadarPowerMode.OFF, "")
                     blePeersMap.clear()
                     gpsPeersMap.clear()
                     updateCombinedPeers()
                     try {
-                        locationManager?.removeUpdates(locationListener)
+                        locManager?.removeUpdates(locationListener)
                     } catch (_: Exception) {}
                 }
 
                 onDispose {
                     try {
-                        locationManager?.removeUpdates(locationListener)
+                        locManager?.removeUpdates(locationListener)
                     } catch (_: Exception) {}
                 }
             }
@@ -454,7 +661,14 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onRefreshPeers = {
                                                     fetchBackendData()
-                                                }
+                                                },
+                                                isBluetoothEnabled = isBluetoothEnabled,
+                                                isLocationEnabled = isLocationEnabled,
+                                                hasBluetoothPermission = hasBluetoothPermission,
+                                                hasLocationPermission = hasLocationPermission,
+                                                onEnableBluetooth = enableBluetooth,
+                                                onEnableLocation = enableLocation,
+                                                onRequestPermissions = requestAllPermissions
                                             )
                                         }
 

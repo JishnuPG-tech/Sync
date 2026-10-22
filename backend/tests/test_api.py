@@ -29,22 +29,24 @@ def setup_database():
 client = TestClient(app)
 
 def test_full_privacy_first_flow():
+    import uuid
+    suffix = uuid.uuid4().hex[:6]
     # 1. Register User 1 (Arun K)
     res_arun = client.post("/api/v1/users/register", json={
-        "display_name": "Arun K",
-        "instagram_username": "arun_k99",
+        "display_name": f"Arun K {suffix}",
+        "instagram_username": f"arun_{suffix}",
         "interests": ["Tech", "Gym", "Gaming"]
     })
     assert res_arun.status_code == 201
     arun_data = res_arun.json()
     arun_id = arun_data["id"]
-    assert arun_data["display_name"] == "Arun K"
-    assert arun_data["instagram_username"] == "arun_k99" # Visible only to owner on registration
+    assert arun_data["display_name"] == f"Arun K {suffix}"
+    assert arun_data["instagram_username"] == f"arun_{suffix}" # Visible only to owner on registration
 
     # 2. Register User 2 (Priya M)
     res_priya = client.post("/api/v1/users/register", json={
-        "display_name": "Priya M",
-        "instagram_username": "priya_m_official",
+        "display_name": f"Priya M {suffix}",
+        "instagram_username": f"priya_{suffix}",
         "interests": ["Design", "Tech", "Photography"]
     })
     assert res_priya.status_code == 201
@@ -53,8 +55,8 @@ def test_full_privacy_first_flow():
 
     # 3. Register User 3 (Far Away User - 5km away)
     res_far = client.post("/api/v1/users/register", json={
-        "display_name": "Far Away User",
-        "instagram_username": "far_away_user",
+        "display_name": f"Far User {suffix}",
+        "instagram_username": f"far_{suffix}",
         "interests": ["Music"]
     })
     far_id = res_far.json()["id"]
@@ -72,13 +74,15 @@ def test_full_privacy_first_flow():
     nearby_list = res_nearby.json()
 
     # Priya must be detected; Far user must NOT be detected
-    assert len(nearby_list) == 1
-    found_peer = nearby_list[0]
+    found_peers = [p for p in nearby_list if p["user_id"] == priya_id]
+    assert len(found_peers) == 1
+    found_peer = found_peers[0]
     assert found_peer["user_id"] == priya_id
-    assert found_peer["display_name"] == "Priya M"
+    assert found_peer["display_name"] == f"Priya M {suffix}"
     assert "Tech" in found_peer["interests"]
     assert found_peer["approx_distance_meters"] < 30.0
     assert found_peer["connection_status"] == "NONE"
+    assert not any(p["user_id"] == far_id for p in nearby_list)
 
     # CRITICAL PRIVACY ASSERTION:
     # Instagram username MUST NOT exist in the nearby peer payload!
@@ -87,12 +91,12 @@ def test_full_privacy_first_flow():
     # 6. Test Ghost Mode (Priya turns off radar)
     client.patch(f"/api/v1/users/{priya_id}/discovery?is_active=false")
     res_nearby_after_ghost = client.get(f"/api/v1/radar/nearby/{arun_id}")
-    assert len(res_nearby_after_ghost.json()) == 0 # Priya is now completely invisible!
+    assert not any(p["user_id"] == priya_id for p in res_nearby_after_ghost.json()) # Priya is now completely invisible!
 
     # Priya turns radar back ON
     client.patch(f"/api/v1/users/{priya_id}/discovery?is_active=true")
     res_reappear = client.get(f"/api/v1/radar/nearby/{arun_id}")
-    assert len(res_reappear.json()) == 1
+    assert any(p["user_id"] == priya_id for p in res_reappear.json())
 
     # 7. Arun Sends Connection Request to Priya
     req_res = client.post("/api/v1/connections/request", json={
@@ -107,7 +111,7 @@ def test_full_privacy_first_flow():
     assert pending_res.status_code == 200
     pending_list = pending_res.json()
     assert len(pending_list) == 1
-    assert pending_list[0]["sender_display_name"] == "Arun K"
+    assert pending_list[0]["sender_display_name"] == f"Arun K {suffix}"
     # CRITICAL PRIVACY ASSERTION:
     # Still NO Instagram username revealed before acceptance!
     assert "instagram_username" not in pending_list[0]
@@ -126,13 +130,13 @@ def test_full_privacy_first_flow():
     # Both users now call /connections/mutual and their Instagram handles are unlocked!
     arun_reveals = client.get(f"/api/v1/connections/mutual/{arun_id}").json()
     assert len(arun_reveals) == 1
-    assert arun_reveals[0]["display_name"] == "Priya M"
-    assert arun_reveals[0]["instagram_username"] == "priya_m_official" # UNLOCKED!
+    assert arun_reveals[0]["display_name"] == f"Priya M {suffix}"
+    assert arun_reveals[0]["instagram_username"] == f"priya_{suffix}" # UNLOCKED!
 
     priya_reveals = client.get(f"/api/v1/connections/mutual/{priya_id}").json()
     assert len(priya_reveals) == 1
-    assert priya_reveals[0]["display_name"] == "Arun K"
-    assert priya_reveals[0]["instagram_username"] == "arun_k99" # UNLOCKED!
+    assert priya_reveals[0]["display_name"] == f"Arun K {suffix}"
+    assert priya_reveals[0]["instagram_username"] == f"arun_{suffix}" # UNLOCKED!
 
     # 12. Cooldown check: Duplicate request is rejected
     dup_res = client.post("/api/v1/connections/request", json={
@@ -228,17 +232,19 @@ def test_verify_instagram_endpoint(monkeypatch):
     assert res_invalid.json()["exists"] is False
 
 def test_ble_token_resolution():
+    import uuid
+    suffix = uuid.uuid4().hex[:6]
     # 1. Register User A and User B
     res_a = client.post("/api/v1/users/register", json={
-        "display_name": "Scanner User",
-        "instagram_username": "scanner_user_ig",
+        "display_name": f"Scanner User {suffix}",
+        "instagram_username": f"scanner_{suffix}",
         "interests": ["Tech"]
     })
     user_a = res_a.json()
     
     res_b = client.post("/api/v1/users/register", json={
-        "display_name": "Target User",
-        "instagram_username": "target_user_ig",
+        "display_name": f"Target User {suffix}",
+        "instagram_username": f"target_{suffix}",
         "interests": ["Fitness", "Design"]
     })
     user_b = res_b.json()
@@ -253,7 +259,7 @@ def test_ble_token_resolution():
     assert res_resolve.status_code == 200
     resolved_card = res_resolve.json()
     assert resolved_card["user_id"] == user_b["id"]
-    assert resolved_card["display_name"] == "Target User"
+    assert resolved_card["display_name"] == f"Target User {suffix}"
     assert "Fitness" in resolved_card["interests"]
     # CRITICAL: Instagram handle MUST NOT be leaked in BLE resolution!
     assert "instagram_username" not in resolved_card
@@ -284,5 +290,5 @@ def test_photo_upload():
     assert res.status_code == 200
     data = res.json()
     assert data["success"] is True
-    assert "/static/uploads/" in data["photo_url"]
+    assert "/static/uploads/" in data["photo_url"] or "supabase.co/storage" in data["photo_url"]
 

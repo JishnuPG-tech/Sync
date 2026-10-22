@@ -57,8 +57,27 @@ def get_user_by_instagram(instagram_username: str) -> Optional[Dict[str, Any]]:
 
 def get_user_by_ble_token(ble_token: str) -> Optional[Dict[str, Any]]:
     supabase = get_supabase()
-    clean = ble_token.strip()
-    res = supabase.table("users").select("*").or_(f"ble_token.eq.{clean},id.eq.{clean}").limit(1).execute()
+    raw = ble_token.strip().lower()
+    clean = raw.replace("-", "")
+
+    if len(clean) == 16:
+        # 8-byte token (16 hex chars): match exact 16-char token OR prefix of UUID ble_token / id
+        prefix_uuid = f"{clean[:8]}-{clean[8:12]}-{clean[12:16]}"
+        res = supabase.table("users").select("*").or_(
+            f"ble_token.eq.{clean},ble_token.ilike.{prefix_uuid}%,id.ilike.{prefix_uuid}%"
+        ).limit(1).execute()
+        if res.data:
+            return res.data[0]
+
+    # Full UUID or other token: check raw, clean, and dashed UUID format
+    or_clauses = [f"ble_token.eq.{raw}", f"id.eq.{raw}"]
+    if clean != raw:
+        or_clauses.extend([f"ble_token.eq.{clean}", f"id.eq.{clean}"])
+    if len(clean) == 32:
+        formatted_uuid = f"{clean[:8]}-{clean[8:12]}-{clean[12:16]}-{clean[16:20]}-{clean[20:]}"
+        or_clauses.extend([f"ble_token.eq.{formatted_uuid}", f"id.eq.{formatted_uuid}"])
+
+    res = supabase.table("users").select("*").or_(",".join(set(or_clauses))).limit(1).execute()
     return res.data[0] if res.data else None
 
 def update_user_discovery(user_id: str, is_active: bool) -> Optional[Dict[str, Any]]:
@@ -69,6 +88,17 @@ def update_user_discovery(user_id: str, is_active: bool) -> Optional[Dict[str, A
     }
     res = supabase.table("users").update(payload).eq("id", user_id).execute()
     return res.data[0] if res.data else None
+
+def is_location_fresh(updated_at_str: Optional[str], max_age_minutes: int = 15) -> bool:
+    if not updated_at_str:
+        return False
+    try:
+        cleaned = updated_at_str.replace("Z", "+00:00")
+        loc_time = datetime.fromisoformat(cleaned)
+        diff_minutes = (datetime.now(timezone.utc) - loc_time).total_seconds() / 60.0
+        return diff_minutes <= max_age_minutes
+    except Exception:
+        return True
 
 def resolve_ble_peer(scanner_user_id: str, ble_token: str) -> Optional[NearbyUserCard]:
     peer = get_user_by_ble_token(ble_token)
@@ -131,8 +161,8 @@ def get_nearby_active_users(
         conn_status = get_connection_status(current_user_id, user["id"])
         interests = [i.strip() for i in user.get("interests_csv", "").split(",") if i.strip()]
 
-        if not curr_loc:
-            # Current user has no GPS ping recorded — proximity requires physical location
+        if not curr_loc or not is_location_fresh(curr_loc.get("updated_at"), max_age_minutes):
+            # Current user has no fresh GPS ping recorded — proximity requires recent physical location
             continue
 
         # Check partner's location
@@ -142,6 +172,9 @@ def get_nearby_active_users(
             continue
 
         partner_loc = partner_loc_res.data[0]
+        if not is_location_fresh(partner_loc.get("updated_at"), max_age_minutes):
+            # Partner location is stale (> max_age_minutes) — skip
+            continue
         dist = haversine_distance_meters(
             curr_loc["latitude"], curr_loc["longitude"],
             partner_loc["latitude"], partner_loc["longitude"]
@@ -158,7 +191,7 @@ def get_nearby_active_users(
                 bio=user.get("bio", ""),
                 location=user.get("location_name", ""),
                 avatar_url=user.get("avatar_url"),
-                interests=[],
+                interests=interests,
                 approx_distance_meters=dist,
                 connection_status=conn_status
             )

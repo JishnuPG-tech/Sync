@@ -14,6 +14,10 @@ def update_location(ping: LocationPing):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     crud.update_user_location(ping.user_id, ping.latitude, ping.longitude)
+    try:
+        crud.update_user_discovery(ping.user_id, True)
+    except Exception:
+        pass
     return {"status": "success", "message": "Location updated"}
 
 @router.get("/nearby/{user_id}", response_model=List[NearbyUserCard])

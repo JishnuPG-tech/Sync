@@ -51,7 +51,7 @@ class SyncApiClient {
         path: String,
         method: String = "GET",
         jsonBody: String? = null,
-        timeoutMs: Int = 5000,
+        timeoutMs: Int = 25000,
         parser: (String) -> T
     ): Result<T> = withContext(Dispatchers.IO) {
         // Try active URL first, then fallback candidates if connection refused

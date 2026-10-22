@@ -94,7 +94,7 @@ def register_user(user_in: UserCreate):
         now_iso = datetime.now(timezone.utc).isoformat()
         update_data = {
             "display_name": user_in.display_name.strip(),
-            "sync_username": user_in.sync_username.strip().lower(),
+            "sync_username": user_in.sync_username.strip().lower() if user_in.sync_username else existing.get("sync_username"),
             "bio": user_in.bio.strip() if user_in.bio else "",
             "location_name": user_in.location.strip() if user_in.location else "",
             "avatar_url": user_in.avatar_url,
