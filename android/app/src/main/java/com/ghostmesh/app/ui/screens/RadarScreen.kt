@@ -86,11 +86,8 @@ fun RadarScreen(
     requestedPeerIds: Set<String> = emptySet(),
     onRefreshPeers: () -> Unit = {},
     isBluetoothEnabled: Boolean = true,
-    isLocationEnabled: Boolean = true,
     hasBluetoothPermission: Boolean = true,
-    hasLocationPermission: Boolean = true,
     onEnableBluetooth: () -> Unit = {},
-    onEnableLocation: () -> Unit = {},
     onRequestPermissions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -147,7 +144,7 @@ fun RadarScreen(
 
             // HARDWARE & PERMISSION STATUS BANNERS (When Radar is ON)
             if (isDiscoveryActive) {
-                if (!hasBluetoothPermission || !hasLocationPermission) {
+                if (!hasBluetoothPermission) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -164,13 +161,13 @@ fun RadarScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Permissions Required",
+                                        text = "Bluetooth Permissions Required",
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
                                     Text(
-                                        text = "Nearby Devices & Location are required for discovery",
+                                        text = "Nearby Devices permission is required for direct radio discovery",
                                         color = Color(0xFFD1D5DB),
                                         fontSize = 11.sp
                                     )
@@ -187,86 +184,42 @@ fun RadarScreen(
                             }
                         }
                     }
-                } else {
-                    if (!isBluetoothEnabled) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF382D18)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
+                } else if (!isBluetoothEnabled) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF382D18)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                                        .fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Bluetooth is Off",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
-                                        Text(
-                                            text = "Turn on Bluetooth to broadcast and discover nearby phones",
-                                            color = Color(0xFFD1D5DB),
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(
-                                        onClick = onEnableBluetooth,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Text("Turn On", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Bluetooth is Off",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        text = "Turn on Bluetooth to broadcast and discover nearby phones",
+                                        color = Color(0xFFD1D5DB),
+                                        fontSize = 11.sp
+                                    )
                                 }
-                            }
-                        }
-                    }
-
-                    if (!isLocationEnabled) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF382D18)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                                        .fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = onEnableBluetooth,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Location is Off",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
-                                        Text(
-                                            text = "Android requires Location enabled for BLE discovery & GPS",
-                                            color = Color(0xFFD1D5DB),
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(
-                                        onClick = onEnableLocation,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Text("Turn On", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
+                                    Text("Turn On", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

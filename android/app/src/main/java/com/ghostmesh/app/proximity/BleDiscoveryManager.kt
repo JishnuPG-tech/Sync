@@ -72,6 +72,7 @@ class BleDiscoveryManager(
     private var currentAdvertisingSet: AdvertisingSet? = null
     private var targetPowerMode: RadarPowerMode = RadarPowerMode.OFF
     private var currentTokenHex: String = ""
+    private var currentDisplayName: String = ""
 
     private var isAdvertising: Boolean = false
     private var isScanning: Boolean = false
@@ -141,9 +142,12 @@ class BleDiscoveryManager(
 
                 val tokenBytes = serviceData.sliceArray(1..8)
                 val rawTokenHex = bytesToHex(tokenBytes)
-                Log.i(TAG, "Sync BLE Packet Captured! Token: $rawTokenHex, RSSI: ${it.rssi}")
+                
+                // Extract instant broadcast name from scanRecord (device name or scan response)
+                val broadcastName = scanRecord.deviceName?.takeIf { it.isNotBlank() }
+                Log.i(TAG, "Sync BLE Packet Captured! Token: $rawTokenHex, Name: $broadcastName, RSSI: ${it.rssi}")
 
-                val observation = proximityEvaluator.recordObservation(rawTokenHex, it.rssi)
+                val observation = proximityEvaluator.recordObservation(rawTokenHex, it.rssi, broadcastName)
                 if (observation != null) {
                     onDeviceDiscovered(observation)
                 }
@@ -214,14 +218,18 @@ class BleDiscoveryManager(
     }
 
     @SuppressLint("MissingPermission")
-    fun setPowerMode(mode: RadarPowerMode, token: String) {
+    fun setPowerMode(mode: RadarPowerMode, token: String, displayName: String = "") {
         val modeChanged = targetPowerMode != mode
         val tokenChanged = currentTokenHex != token && token.isNotBlank()
+        val nameChanged = currentDisplayName != displayName && displayName.isNotBlank()
 
         targetPowerMode = mode
         if (token.isNotBlank()) {
             // Keep normalized 16-hex characters (8 bytes)
             currentTokenHex = token.replace("-", "").take(16).lowercase()
+        }
+        if (displayName.isNotBlank()) {
+            currentDisplayName = displayName.take(20)
         }
 
         if (mode == RadarPowerMode.OFF) {
@@ -230,7 +238,7 @@ class BleDiscoveryManager(
             return
         }
 
-        if (modeChanged || tokenChanged || !isAdvertising || !isScanning) {
+        if (modeChanged || tokenChanged || nameChanged || !isAdvertising || !isScanning) {
             startRadios()
         }
     }
@@ -310,8 +318,19 @@ class BleDiscoveryManager(
                 .setIncludeTxPowerLevel(false)
                 .build()
 
-            advertiser?.startAdvertising(settings, data, legacyAdvertiseCallback)
-            Log.i(TAG, "Launching Standard BLE Advertising (Service Data: 9 bytes)")
+            val scanResponse = AdvertiseData.Builder()
+                .setIncludeDeviceName(true)
+                .build()
+
+            // Set local Bluetooth adapter name to current user's display name if permitted
+            try {
+                if (currentDisplayName.isNotBlank() && bluetoothAdapter?.name != currentDisplayName) {
+                    bluetoothAdapter?.name = currentDisplayName
+                }
+            } catch (_: Exception) {}
+
+            advertiser?.startAdvertising(settings, data, scanResponse, legacyAdvertiseCallback)
+            Log.i(TAG, "Launching Standard BLE Advertising with Scan Response (Name: $currentDisplayName)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Standard BLE Advertising", e)
             isAdvertising = false
@@ -342,7 +361,7 @@ class BleDiscoveryManager(
 
             val advertiseData = AdvertiseData.Builder()
                 .addServiceData(SYNC_SERVICE_PARCEL, payloadBytes)
-                .setIncludeDeviceName(false)
+                .setIncludeDeviceName(true)
                 .setIncludeTxPowerLevel(false)
                 .build()
 
@@ -375,6 +394,9 @@ class BleDiscoveryManager(
 
         val settingsBuilder = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+            .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
             .setReportDelay(0L)
 
         if (useExtendedPhy && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

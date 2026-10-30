@@ -16,7 +16,8 @@ data class FilteredBleObservation(
     val smoothedRssi: Int,
     val proximityTier: ProximityTier,
     val isConfident: Boolean,
-    val lastSeenElapsedRealtime: Long // Monotonic clock: Immune to network time jumps
+    val lastSeenElapsedRealtime: Long, // Monotonic clock: Immune to network time jumps
+    val broadcastDisplayName: String? = null // Instant peer name from BLE scan record
 )
 
 /**
@@ -35,7 +36,7 @@ class ProximityEvaluator(
     private val rssiHistory = mutableMapOf<String, ArrayDeque<Int>>()
     private val activeEncounters = mutableSetOf<String>()
 
-    fun recordObservation(token: String, rawRssi: Int): FilteredBleObservation? {
+    fun recordObservation(token: String, rawRssi: Int, displayName: String? = null): FilteredBleObservation? {
         val nowElapsed = SystemClock.elapsedRealtime()
         val history = rssiHistory.getOrPut(token) { ArrayDeque(windowSize) }
 
@@ -70,7 +71,8 @@ class ProximityEvaluator(
                 smoothedRssi = medianRssi,
                 proximityTier = tier,
                 isConfident = history.size >= (if (tier == ProximityTier.EXTENDED) minSightingsForExtended else minSightingsForClose),
-                lastSeenElapsedRealtime = nowElapsed
+                lastSeenElapsedRealtime = nowElapsed,
+                broadcastDisplayName = displayName
             )
         }
         return null
