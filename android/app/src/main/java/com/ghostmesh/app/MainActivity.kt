@@ -82,7 +82,8 @@ class MainActivity : ComponentActivity() {
         fun checkBtPerms(): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
+                checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
             } else {
                 true
             }

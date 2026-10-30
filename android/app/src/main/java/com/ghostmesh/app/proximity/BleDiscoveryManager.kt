@@ -121,7 +121,19 @@ class BleDiscoveryManager(
             isScanning = true
             result?.let {
                 val scanRecord = it.scanRecord ?: return
-                val serviceData = scanRecord.getServiceData(SYNC_SERVICE_PARCEL) ?: return
+                var serviceData = scanRecord.getServiceData(SYNC_SERVICE_PARCEL)
+                
+                // Fallback: check all service data entries if parcel mapping had strict uuid format differences
+                if (serviceData == null) {
+                    for ((parcel, bytes) in scanRecord.serviceData) {
+                        if (parcel.uuid == SYNC_SERVICE_UUID || parcel.uuid.toString().equals(SYNC_SERVICE_UUID.toString(), ignoreCase = true)) {
+                            serviceData = bytes
+                            break
+                        }
+                    }
+                }
+
+                if (serviceData == null) return
 
                 // Validate minimum length (1 byte version + 8 bytes token = 9 bytes)
                 if (serviceData.size < 9) return
@@ -354,13 +366,12 @@ class BleDiscoveryManager(
      */
     @SuppressLint("MissingPermission")
     private fun startConfiguredScan(useExtendedPhy: Boolean) {
-        val filter = ScanFilter.Builder()
-            .setServiceData(
-                SYNC_SERVICE_PARCEL,
-                byteArrayOf(PROTOCOL_VERSION),
-                byteArrayOf(0xFF.toByte())
-            )
-            .build()
+        // Hardware filters: Match on Service UUID directly (universal across chipsets)
+        // Software verification in scanCallback inspects Service Data and protocol version
+        val filters = listOf(
+            ScanFilter.Builder().setServiceUuid(SYNC_SERVICE_PARCEL).build(),
+            ScanFilter.Builder().setServiceData(SYNC_SERVICE_PARCEL, null).build()
+        )
 
         val settingsBuilder = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -372,7 +383,7 @@ class BleDiscoveryManager(
         }
 
         try {
-            scanner?.startScan(listOf(filter), settingsBuilder.build(), scanCallback)
+            scanner?.startScan(filters, settingsBuilder.build(), scanCallback)
             isScanning = true
             Log.i(TAG, "BLE Scanner active with Low Latency filter (Extended=$useExtendedPhy)")
             updateActiveState()

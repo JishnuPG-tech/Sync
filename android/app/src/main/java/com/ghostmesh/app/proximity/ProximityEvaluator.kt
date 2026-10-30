@@ -28,8 +28,8 @@ data class FilteredBleObservation(
  */
 class ProximityEvaluator(
     private val windowSize: Int = 6,
-    private val entryThresholdDbm: Int = -95,
-    private val minSightingsForExtended: Int = 2,
+    private val entryThresholdDbm: Int = -98,
+    private val minSightingsForExtended: Int = 1,
     private val minSightingsForClose: Int = 1
 ) {
     private val rssiHistory = mutableMapOf<String, ArrayDeque<Int>>()
