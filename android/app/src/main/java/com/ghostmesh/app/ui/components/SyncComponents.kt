@@ -226,12 +226,18 @@ fun SyncConnectionCelebrationDialog(
                         .clip(RoundedCornerShape(14.dp))
                         .background(AuraTheme.colors.surfaceSubtle)
                         .border(1.dp, AuraTheme.colors.border, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .clickable {
+                            val cleanHandle = instagramHandle.removePrefix("@")
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/"))
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                        .padding(horizontal = 14.dp, vertical = 14.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -239,7 +245,7 @@ fun SyncConnectionCelebrationDialog(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
+                                    .size(36.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(AuraTheme.colors.accent),
                                 contentAlignment = Alignment.Center
@@ -247,7 +253,7 @@ fun SyncConnectionCelebrationDialog(
                                 Text(
                                     text = "IG",
                                     fontFamily = DmSansFontFamily,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -255,16 +261,16 @@ fun SyncConnectionCelebrationDialog(
 
                             Column {
                                 Text(
-                                    text = "@$instagramHandle",
+                                    text = "@",
                                     fontFamily = DmMonoFontFamily,
-                                    fontSize = 13.5.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = AuraTheme.colors.ink
                                 )
                                 Text(
-                                    text = "Unlocked Instagram profile",
+                                    text = "Tap to view on Instagram",
                                     fontFamily = DmSansFontFamily,
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     color = AuraTheme.colors.success
                                 )
                             }
@@ -273,29 +279,27 @@ fun SyncConnectionCelebrationDialog(
                         Button(
                             onClick = {
                                 val cleanHandle = instagramHandle.removePrefix("@")
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/$cleanHandle"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/"))
                                 try {
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             },
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AuraTheme.colors.accent,
                                 contentColor = Color.White
-                            ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            )
                         ) {
                             Text(
-                                text = "Open IG",
+                                text = "Open Instagram Profile",
                                 fontFamily = DmSansFontFamily,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
 
                 // Full clearance dismiss button
                 Button(

@@ -274,16 +274,7 @@ fun DiscoveredScreen(
         }
     }
 
-    // CELEBRATION MODAL (Strictly NO heart icons!)
-    celebrationPeer?.let { peer ->
-        SyncConnectionCelebrationDialog(
-            matchedName = peer.sender_display_name,
-            instagramHandle = "${peer.sender_display_name.lowercase().replace(" ", "")}.dev",
-            myAvatarAsset = "portrait_05.jpg",
-            peerAvatarAsset = peer.sender_avatar_asset,
-            onDismiss = { celebrationPeer = null }
-        )
-    }
+    // Direct Instagram Experience: No sync/connect modal needed
 }
 
 /**
@@ -329,8 +320,15 @@ private fun IncomingRequestHeroCard(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
+    val context = LocalContext.current
+    val heroHandle = request.sender_display_name.filter { it.isLetterOrDigit() || it == '_' || it == '.' }.lowercase()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                val intent = NotificationHelper.createInstagramIntent(context, heroHandle)
+                context.startActivity(intent)
+            },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.surface),
         border = androidx.compose.foundation.BorderStroke(1.5.dp, AuraTheme.colors.accent)
