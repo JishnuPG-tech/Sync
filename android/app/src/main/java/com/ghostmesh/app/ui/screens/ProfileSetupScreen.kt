@@ -360,7 +360,13 @@ fun ProfileSetupScreen(
             AppInputBox(
                 value = instagramHandle,
                 onValueChange = {
-                    instagramHandle = it.trim().removePrefix("@")
+                    val clean = it.trim().removePrefix("@")
+                    val prevIg = instagramHandle
+                    instagramHandle = clean
+                    // Always synchronize exact Instagram username to Sync username if matching
+                    if (syncUsername.isBlank() || syncUsername == prevIg || syncUsername == initialSyncUsername) {
+                        syncUsername = clean
+                    }
                     isInstagramVerified = false
                     instagramVerificationError = null
                     instagramAvatarUrl = null

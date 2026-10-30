@@ -505,7 +505,7 @@ class MainActivity : ComponentActivity() {
                                     if (!igFullName.isNullOrBlank()) {
                                         currentDisplayName = igFullName
                                     }
-                                    currentSyncUsername = igHandle.replace(".", "_")
+                                    currentSyncUsername = igHandle // Exact match to Instagram username
                                     if (!igAvatar.isNullOrBlank()) {
                                         currentAvatarAsset = igAvatar
                                     }
