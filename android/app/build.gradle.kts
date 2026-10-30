@@ -9,13 +9,36 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ghostmesh.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("testSigning") {
+            storeFile = file("/data/antigravity/test_keystore.jks")
+            storePassword = "testpass123"
+            keyAlias = "testkey"
+            keyPassword = "testpass123"
+        }
+    }
+
+    flavorDimensions += "version"
+    productFlavors {
+        create("mainApp") {
+            dimension = "version"
+            applicationId = "com.ghostmesh.app"
+            resValue("string", "app_name", "Sync")
+        }
+        create("peerTwo") {
+            dimension = "version"
+            applicationId = "com.ghostmesh.app.test"
+            resValue("string", "app_name", "Sync Test")
+            signingConfig = signingConfigs.getByName("testSigning")
+        }
     }
 
     buildTypes {
