@@ -29,31 +29,50 @@ class SyncRadarService : Service() {
         private const val NOTIFICATION_COOLDOWN_MS = 5 * 60 * 1000L
         private val lastNotifiedMap = ConcurrentHashMap<String, Long>()
 
+        @Volatile
+        var isServiceRunning: Boolean = false
+            private set
+
         fun startService(context: Context, isAppForeground: Boolean = true) {
-            val intent = Intent(context, SyncRadarService::class.java).apply {
-                action = ACTION_START_RADAR
-                putExtra(EXTRA_IS_APP_FOREGROUND, isAppForeground)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                val intent = Intent(context, SyncRadarService::class.java).apply {
+                    action = ACTION_START_RADAR
+                    putExtra(EXTRA_IS_APP_FOREGROUND, isAppForeground)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                isServiceRunning = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start SyncRadarService: " + e.message, e)
             }
         }
 
         fun stopService(context: Context) {
-            val intent = Intent(context, SyncRadarService::class.java).apply {
-                action = ACTION_STOP_RADAR
+            if (!isServiceRunning) return
+            try {
+                val intent = Intent(context, SyncRadarService::class.java).apply {
+                    action = ACTION_STOP_RADAR
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to stop SyncRadarService: " + e.message)
             }
-            context.startService(intent)
         }
 
         fun notifyAppForegroundState(context: Context, isForeground: Boolean) {
-            val intent = Intent(context, SyncRadarService::class.java).apply {
-                action = ACTION_SET_FOREGROUND_STATE
-                putExtra(EXTRA_IS_APP_FOREGROUND, isForeground)
+            if (!isServiceRunning) return
+            try {
+                val intent = Intent(context, SyncRadarService::class.java).apply {
+                    action = ACTION_SET_FOREGROUND_STATE
+                    putExtra(EXTRA_IS_APP_FOREGROUND, isForeground)
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not notify foreground state: " + e.message)
             }
-            context.startService(intent)
         }
     }
 
@@ -63,6 +82,7 @@ class SyncRadarService : Service() {
     private var isAppInForeground: Boolean = true
 
     override fun onCreate() {
+        isServiceRunning = true
         super.onCreate()
         Log.i(TAG, "SyncRadarService onCreate: initializing background radar engine")
 
@@ -233,6 +253,7 @@ class SyncRadarService : Service() {
     }
 
     override fun onDestroy() {
+        isServiceRunning = false
         super.onDestroy()
         Log.i(TAG, "SyncRadarService onDestroy")
         stopRadarEngine()

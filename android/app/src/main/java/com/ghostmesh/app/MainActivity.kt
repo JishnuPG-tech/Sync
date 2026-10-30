@@ -91,21 +91,34 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Request modern Android Bluetooth & Notification permissions on launch
-        val permissions = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        if (permissions.isNotEmpty()) {
-            permissionLauncher.launch(permissions.toTypedArray())
-        }
+        // Permissions are requested smoothly via LaunchedEffect once the window is rendered
 
         setContent {
+            // Smoothly request missing permissions once the splash UI has visibly drawn
+            LaunchedEffect(Unit) {
+                val missing = mutableListOf<String>()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.BLUETOOTH_SCAN)
+                    }
+                    if (checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+                    }
+                    if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                if (missing.isNotEmpty()) {
+                    delay(400) // Ensure the splash screen is drawn on screen first
+                    permissionLauncher.launch(missing.toTypedArray())
+                }
+            }
+
             var currentThemePreset by remember { mutableStateOf(ThemePreset.CLAUDE_WARM) }
             var appearanceMode by remember { mutableStateOf(AppearanceMode.LIGHT) }
 
@@ -686,11 +699,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        SyncRadarService.notifyAppForegroundState(this, true)
+        if (SyncRadarService.isServiceRunning) {
+            SyncRadarService.notifyAppForegroundState(this, true)
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        SyncRadarService.notifyAppForegroundState(this, false)
+        if (SyncRadarService.isServiceRunning) {
+            SyncRadarService.notifyAppForegroundState(this, false)
+        }
     }
 }

@@ -143,7 +143,11 @@ object NotificationHelper {
             .build()
 
         val notifId = PEER_NOTIFICATION_BASE_ID + (cleanHandle.hashCode() and 0x7FFF)
-        manager.notify(notifId, notification)
+        try {
+            manager.notify(notifId, notification)
+        } catch (e: Exception) {
+            android.util.Log.w("NotificationHelper", "Cannot post notification: " + e.message)
+        }
     }
 
     /**
