@@ -1,5 +1,7 @@
 package com.ghostmesh.app
 
+import com.ghostmesh.app.proximity.SyncRadarService
+import com.ghostmesh.app.proximity.FilteredBleObservation
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
@@ -237,100 +239,115 @@ class MainActivity : ComponentActivity() {
             val tokenToUserIdMap = remember { ConcurrentHashMap<String, String>() }
             val lastSeenMonotonicMap = remember { ConcurrentHashMap<String, Long>() }
 
-            val bleManager = remember {
-                BleDiscoveryManager(this@MainActivity, proximityEvaluator) { observation ->
-                    if (powerMode == RadarPowerMode.OFF || currentUserId.isBlank()) return@BleDiscoveryManager
-                    val rawToken = observation.deviceToken
-                    val nowElapsed = SystemClock.elapsedRealtime()
-                    lastSeenMonotonicMap[rawToken] = nowElapsed
+            fun processObservation(observation: FilteredBleObservation) {
+                if (powerMode == RadarPowerMode.OFF || currentUserId.isBlank()) return
+                val rawToken = observation.deviceToken
+                val nowElapsed = SystemClock.elapsedRealtime()
+                lastSeenMonotonicMap[rawToken] = nowElapsed
 
-                    val distDisplay = when (observation.proximityTier) {
-                        ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
-                        ProximityTier.NEARBY -> "Nearby • ~5m"
-                        ProximityTier.EXTENDED -> "Extended • ~15m"
-                    }
+                val distDisplay = when (observation.proximityTier) {
+                    ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
+                    ProximityTier.NEARBY -> "Nearby • ~5m"
+                    ProximityTier.EXTENDED -> "Extended • ~15m"
+                }
 
-                    // 1. In-Memory Cache Hit: Update RSSI, distance, and timestamps instantly with ZERO network latency
-                    val cachedProfile = resolvedProfileCache[rawToken]
-                    if (cachedProfile != null) {
-                        val updatedUi = cachedProfile.copy(
-                            distanceDisplay = distDisplay,
-                            isCurrentlyInRange = true,
-                            confidenceTier = observation.proximityTier,
-                            lastSeenElapsedMs = nowElapsed
-                        )
-                        blePeersMap[cachedProfile.encounterId] = updatedUi
-                        updateCombinedPeers()
-                        return@BleDiscoveryManager
-                    }
+                val broadcastName = observation.broadcastDisplayName ?: ""
+                var parsedIg: String? = null
+                var parsedName = broadcastName
 
-                    // 2. Instant Optimistic Render from BLE Scan Record (Zero-Wait Local Discovery!)
-                    val broadcastName = observation.broadcastDisplayName
-                    val provisionalId = tokenToUserIdMap[rawToken] ?: rawToken
-                    if (!blePeersMap.containsKey(provisionalId)) {
-                        val instantUi = NearbyPeerUiModel(
-                            encounterId = provisionalId,
-                            displayName = broadcastName?.takeIf { it.isNotBlank() } ?: "Nearby Sync User",
-                            introduction = "Connecting directly via Bluetooth radio...",
-                            avatarAsset = null,
-                            distanceDisplay = distDisplay,
-                            isCurrentlyInRange = true,
-                            confidenceTier = observation.proximityTier,
-                            lastSeenElapsedMs = nowElapsed
-                        )
-                        blePeersMap[provisionalId] = instantUi
-                        updateCombinedPeers()
-                    }
+                if (broadcastName.startsWith("IG:", ignoreCase = true)) {
+                    parsedIg = broadcastName.substring(3).trim()
+                    parsedName = parsedIg
+                } else if (broadcastName.contains("|")) {
+                    val parts = broadcastName.split("|")
+                    parsedName = parts[0].trim()
+                    parsedIg = parts.getOrNull(1)?.trim()
+                } else if (broadcastName.isNotBlank()) {
+                    parsedIg = broadcastName
+                }
 
-                    // 3. Fast Deduplicated Backend Metadata Enrichment (2-second exponential backoff instead of 30s blackout)
-                    val lastFailed = failedLookupCooldown[rawToken] ?: 0L
-                    if (nowElapsed - lastFailed < 2_500L) {
-                        return@BleDiscoveryManager
-                    }
-                    if (inFlightLookups[rawToken] == true) {
-                        return@BleDiscoveryManager
-                    }
+                // 1. In-Memory Cache Hit
+                val cachedProfile = resolvedProfileCache[rawToken]
+                if (cachedProfile != null) {
+                    val updatedUi = cachedProfile.copy(
+                        distanceDisplay = distDisplay,
+                        isCurrentlyInRange = true,
+                        confidenceTier = observation.proximityTier,
+                        lastSeenElapsedMs = nowElapsed,
+                        instagramUsername = cachedProfile.instagramUsername ?: parsedIg
+                    )
+                    blePeersMap[cachedProfile.encounterId] = updatedUi
+                    updateCombinedPeers()
+                    return
+                }
 
-                    inFlightLookups[rawToken] = true
-                    coroutineScope.launch {
-                        try {
-                            val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
-                            if (resolveRes.isSuccess) {
-                                val peerCard = resolveRes.getOrNull()
-                                if (peerCard != null && peerCard.userId != currentUserId) {
-                                    val peerUi = NearbyPeerUiModel(
-                                        encounterId = peerCard.userId,
-                                        displayName = peerCard.displayName,
-                                        introduction = peerCard.bio,
-                                        avatarAsset = peerCard.avatarUrl,
-                                        distanceDisplay = distDisplay,
-                                        isCurrentlyInRange = true,
-                                        confidenceTier = observation.proximityTier,
-                                        lastSeenElapsedMs = nowElapsed
-                                    )
-                                    resolvedProfileCache[rawToken] = peerUi
-                                    tokenToUserIdMap[rawToken] = peerCard.userId
-                                    // Remove provisional placeholder if it was keyed by rawToken
-                                    if (provisionalId != peerCard.userId) {
-                                        blePeersMap.remove(provisionalId)
-                                    }
-                                    blePeersMap[peerCard.userId] = peerUi
-                                    updateCombinedPeers()
+                // 2. Instant Optimistic Render
+                val provisionalId = tokenToUserIdMap[rawToken] ?: rawToken
+                if (!blePeersMap.containsKey(provisionalId)) {
+                    val instantUi = NearbyPeerUiModel(
+                        encounterId = provisionalId,
+                        displayName = parsedName.ifBlank { "Nearby Sync User" },
+                        introduction = "Discovered in physical proximity via Bluetooth Low Energy",
+                        avatarAsset = null,
+                        distanceDisplay = distDisplay,
+                        isCurrentlyInRange = true,
+                        confidenceTier = observation.proximityTier,
+                        lastSeenElapsedMs = nowElapsed,
+                        instagramUsername = parsedIg
+                    )
+                    blePeersMap[provisionalId] = instantUi
+                    updateCombinedPeers()
+                }
+
+                // 3. Fast Deduplicated Backend Metadata Enrichment
+                val lastFailed = failedLookupCooldown[rawToken] ?: 0L
+                if (nowElapsed - lastFailed < 2_500L) return
+                if (inFlightLookups[rawToken] == true) return
+
+                inFlightLookups[rawToken] = true
+                coroutineScope.launch {
+                    try {
+                        val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
+                        if (resolveRes.isSuccess) {
+                            val peerCard = resolveRes.getOrNull()
+                            if (peerCard != null && peerCard.userId != currentUserId) {
+                                val peerUi = NearbyPeerUiModel(
+                                    encounterId = peerCard.userId,
+                                    displayName = peerCard.displayName,
+                                    introduction = peerCard.bio,
+                                    avatarAsset = peerCard.avatarUrl,
+                                    distanceDisplay = distDisplay,
+                                    isCurrentlyInRange = true,
+                                    confidenceTier = observation.proximityTier,
+                                    lastSeenElapsedMs = nowElapsed,
+                                    instagramUsername = peerCard.instagramUsername ?: parsedIg
+                                )
+                                resolvedProfileCache[rawToken] = peerUi
+                                tokenToUserIdMap[rawToken] = peerCard.userId
+                                if (provisionalId != peerCard.userId) {
+                                    blePeersMap.remove(provisionalId)
                                 }
-                            } else {
-                                failedLookupCooldown[rawToken] = SystemClock.elapsedRealtime()
+                                blePeersMap[peerCard.userId] = peerUi
+                                updateCombinedPeers()
                             }
-                        } finally {
-                            inFlightLookups.remove(rawToken)
+                        } else {
+                            failedLookupCooldown[rawToken] = SystemClock.elapsedRealtime()
                         }
+                    } finally {
+                        inFlightLookups.remove(rawToken)
                     }
                 }
             }
 
-            // Clean up BLE manager resources on dispose
-            DisposableEffect(bleManager) {
+            // Connect to SyncRadarService global stream
+            DisposableEffect(Unit) {
+                SyncRadarService.onPeerDiscoveredListener = { obs ->
+                    runOnUiThread {
+                        processObservation(obs)
+                    }
+                }
                 onDispose {
-                    bleManager.destroy()
+                    SyncRadarService.onPeerDiscoveredListener = null
                 }
             }
 
@@ -366,8 +383,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (isBluetoothEnabled && hasBluetoothPermission) {
-                        val tokenToAdvertise = UserSession.getBleToken(this@MainActivity)
-                        bleManager.setPowerMode(powerMode, tokenToAdvertise, currentDisplayName)
+                        SyncRadarService.startService(this@MainActivity, isAppForeground = true)
                     }
                 } else {
                     if (currentUserId.isNotBlank()) {
@@ -375,15 +391,13 @@ class MainActivity : ComponentActivity() {
                             apiClient.toggleDiscovery(currentUserId, false)
                         }
                     }
-                    bleManager.setPowerMode(RadarPowerMode.OFF, "", "")
+                    SyncRadarService.stopService(this@MainActivity)
                     blePeersMap.clear()
                     gpsPeersMap.clear()
                     updateCombinedPeers()
                 }
 
-                onDispose {
-                    // Radio shutdown managed cleanly by bleManager
-                }
+                onDispose {}
             }
 
             // Synchronize with backend API (Requests & Mutual Connections)
@@ -668,5 +682,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SyncRadarService.notifyAppForegroundState(this, true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        SyncRadarService.notifyAppForegroundState(this, false)
     }
 }

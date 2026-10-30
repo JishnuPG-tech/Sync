@@ -392,10 +392,10 @@ fun AuraPersonCard(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "Instagram hidden",
+                                text = "Instagram visible",
                                 style = AuraTheme.typography.labelSmall,
-                                color = AuraTheme.colors.inkMuted,
-                                fontWeight = FontWeight.Medium
+                                color = AuraTheme.colors.accent,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }

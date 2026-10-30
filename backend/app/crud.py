@@ -116,6 +116,7 @@ def resolve_ble_peer(scanner_user_id: str, ble_token: str) -> Optional[NearbyUse
         avatar_url=peer.get("avatar_url"),
         interests=interests,
         approx_distance_meters=0.0,
+        instagram_username=peer.get("instagram_username"),
         connection_status=conn_status
     )
 

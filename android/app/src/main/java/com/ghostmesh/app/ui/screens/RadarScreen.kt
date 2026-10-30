@@ -1,5 +1,8 @@
 package com.ghostmesh.app.ui.screens
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.outlined.OpenInNew
+import com.ghostmesh.app.proximity.NotificationHelper
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -598,6 +601,9 @@ fun SyncPeerCard(
     onConnect: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val context = LocalContext.current
+    val igHandle = peer.instagramUsername ?: peer.displayName.filter { it.isLetterOrDigit() || it == '_' || it == '.' }.lowercase()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -689,22 +695,34 @@ fun SyncPeerCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    // Privacy Row
+                    // Transparent Instagram Handle Row (Directly visible!)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable {
+                                val intent = NotificationHelper.createInstagramIntent(context, igHandle)
+                                context.startActivity(intent)
+                            }
+                            .padding(vertical = 2.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = AuraTheme.colors.inkSecondary,
-                            modifier = Modifier.size(11.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                                    )
+                                )
                         )
                         Text(
-                            text = "Instagram hidden",
+                            text = "@",
                             fontFamily = DmMonoFontFamily,
-                            fontSize = 10.5.sp,
-                            color = AuraTheme.colors.inkSecondary
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            color = AuraTheme.colors.accent
                         )
                     }
 
@@ -761,10 +779,47 @@ fun SyncPeerCard(
                     }
                 }
 
+                // Open Instagram Direct Action Button
+                Box(
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF833AB4), Color(0xFFE1306C), Color(0xFFFD1D1D), Color(0xFFF77737))
+                            )
+                        )
+                        .clickable {
+                            val intent = NotificationHelper.createInstagramIntent(context, igHandle)
+                            context.startActivity(intent)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInNew,
+                            contentDescription = "Open Instagram",
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Instagram",
+                            fontFamily = DmSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+
                 // Connect Button
                 Box(
                     modifier = Modifier
-                        .weight(1.3f)
+                        .weight(1.1f)
                         .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (isRequested) AuraTheme.colors.success else AuraTheme.colors.accent)

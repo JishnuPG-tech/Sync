@@ -85,7 +85,8 @@ class NearbyUserCard(BaseModel):
     avatar_url: Optional[str] = None
     interests: List[str]
     approx_distance_meters: float
-    connection_status: str = "NONE" # "NONE", "PENDING_SENT", "PENDING_RECEIVED", "CONNECTED"
+    connection_status: str = "NONE"
+    instagram_username: Optional[str] = None
 
 class LocationPing(BaseModel):
     user_id: str

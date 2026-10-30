@@ -304,10 +304,21 @@ class BleDiscoveryManager(
     @SuppressLint("MissingPermission")
     private fun startStandardAdvertising() {
         val payloadBytes = buildSyncPacket()
+        val advMode = if (targetPowerMode == RadarPowerMode.SMART_DISCOVERY) {
+            AdvertiseSettings.ADVERTISE_MODE_BALANCED
+        } else {
+            AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY
+        }
+        val txPower = if (targetPowerMode == RadarPowerMode.SMART_DISCOVERY) {
+            AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM
+        } else {
+            AdvertiseSettings.ADVERTISE_TX_POWER_HIGH
+        }
+
         try {
             val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+                .setAdvertiseMode(advMode)
+                .setTxPowerLevel(txPower)
                 .setConnectable(false)
                 .setTimeout(0)
                 .build()
@@ -392,8 +403,14 @@ class BleDiscoveryManager(
             ScanFilter.Builder().setServiceData(SYNC_SERVICE_PARCEL, null).build()
         )
 
+        val scanMode = if (targetPowerMode == RadarPowerMode.SMART_DISCOVERY) {
+            ScanSettings.SCAN_MODE_BALANCED
+        } else {
+            ScanSettings.SCAN_MODE_LOW_LATENCY
+        }
+
         val settingsBuilder = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(scanMode)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
             .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)

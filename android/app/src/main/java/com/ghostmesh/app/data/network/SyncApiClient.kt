@@ -208,7 +208,8 @@ class SyncApiClient {
                 location = obj.optString("location", ""),
                 avatarUrl = obj.optString("avatar_url").takeIf { it.isNotEmpty() },
                 approxDistanceMeters = obj.optDouble("approx_distance_meters", 0.0),
-                connectionStatus = obj.optString("connection_status", "NONE")
+                connectionStatus = obj.optString("connection_status", "NONE"),
+                instagramUsername = obj.optString("instagram_username").takeIf { it.isNotBlank() }
             )
         }
     }
@@ -242,7 +243,8 @@ class SyncApiClient {
                         isCurrentlyInRange = true,
                         distanceDisplay = "${distMeters.toInt()}m",
                         avatarAsset = obj.optString("avatar_url").takeIf { it.isNotEmpty() } ?: "",
-                        connectionState = obj.optString("connection_status", "NONE")
+                        connectionState = obj.optString("connection_status", "NONE"),
+                        instagramUsername = obj.optString("instagram_username").takeIf { it.isNotBlank() }
                     )
                 )
             }

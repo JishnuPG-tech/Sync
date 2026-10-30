@@ -31,7 +31,8 @@ data class NearbyUserCardDto(
     val location: String = "",
     val avatarUrl: String? = null,
     val approxDistanceMeters: Double = 0.0,
-    val connectionStatus: String = "NONE"
+    val connectionStatus: String = "NONE",
+    val instagramUsername: String? = null
 )
 
 /**
@@ -55,7 +56,8 @@ data class NearbyPeerUiModel(
     val avatarAsset: String? = null,
     val distanceDisplay: String = "14m",
     val lastSeenElapsedMs: Long = 0L,
-    val connectionState: String = "NONE" // "NONE", "PENDING_SENT", "CONNECTED"
+    val connectionState: String = "NONE", // "NONE", "PENDING_SENT", "CONNECTED"
+    val instagramUsername: String? = null
 )
 
 // Legacy alias for proximity compatibility

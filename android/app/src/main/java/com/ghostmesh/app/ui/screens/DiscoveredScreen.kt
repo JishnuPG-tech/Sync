@@ -1,5 +1,10 @@
 package com.ghostmesh.app.ui.screens
 
+import androidx.compose.ui.graphics.Brush
+
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.outlined.OpenInNew
+import com.ghostmesh.app.proximity.NotificationHelper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -411,21 +416,32 @@ private fun IncomingRequestHeroCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
+                    val context = LocalContext.current
+                    val reqHandle = request.sender_display_name.filter { it.isLetterOrDigit() || it == '_' || it == '.' }.lowercase()
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.clickable {
+                            val intent = NotificationHelper.createInstagramIntent(context, reqHandle)
+                            context.startActivity(intent)
+                        }
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = AuraTheme.colors.inkSecondary,
-                            modifier = Modifier.size(11.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                                    )
+                                )
                         )
                         Text(
-                            text = "Instagram hidden",
+                            text = "@",
                             fontFamily = DmMonoFontFamily,
-                            fontSize = 10.5.sp,
-                            color = AuraTheme.colors.inkSecondary
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AuraTheme.colors.accent
                         )
                     }
 
