@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostmesh.app.data.network.SyncApiClient
@@ -111,7 +112,7 @@ fun InstagramInputScreen(
         keyboardController?.hide()
         isAnalyzing = true
         errorMessage = null
-        analysisStatusText = "Connecting to Instagram..."
+        analysisStatusText = "Connecting..."
 
         coroutineScope.launch {
             try {
@@ -338,7 +339,7 @@ fun InstagramInputScreen(
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
-                    text = "Encrypted. Shared only after a mutual connection match.",
+                    text = "Pure offline BLE. 1-tap open directly to Instagram.",
                     fontFamily = DmMonoFontFamily,
                     fontSize = 10.5.sp,
                     color = AuraTheme.colors.inkMuted,
@@ -389,8 +390,8 @@ fun InstagramInputScreen(
 
             // ACTION BUTTON: Analyze & Continue
             Button(
-                onClick = { performAnalysis() },
-                enabled = instagramInput.isNotBlank() && !isAnalyzing,
+                onClick = { if (!isAnalyzing) performAnalysis() },
+                enabled = instagramInput.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
@@ -404,26 +405,31 @@ fun InstagramInputScreen(
             ) {
                 if (isAnalyzing) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator(
                             color = Color.White,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(16.dp)
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(18.dp)
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = analysisStatusText,
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            color = Color.White
+                            fontSize = 14.5.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 } else if (isSuccess) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Check,
@@ -431,18 +437,20 @@ fun InstagramInputScreen(
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Profile Extracted!",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
+                            fontSize = 14.5.sp,
                             color = Color.White
                         )
                     }
                 } else {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = "Analyze & Continue",
@@ -451,6 +459,7 @@ fun InstagramInputScreen(
                             fontSize = 15.sp,
                             color = Color.White
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
                             contentDescription = null,

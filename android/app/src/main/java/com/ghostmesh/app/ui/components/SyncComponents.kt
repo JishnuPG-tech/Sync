@@ -88,27 +88,8 @@ fun SyncTopBar(
         ) {
             SyncBrandLockup(iconSize = 24.dp, fontSize = 20.sp, withDot = false)
 
-            if (onAddClick != null) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(AuraTheme.colors.surface)
-                        .border(1.dp, AuraTheme.colors.border, CircleShape)
-                        .clickable { onAddClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "+",
-                        fontFamily = DmSansFontFamily,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AuraTheme.colors.inkSecondary
-                    )
-                }
-            } else {
-                Spacer(modifier = Modifier.size(34.dp))
-            }
+            // Top right is kept clean and minimalist (no unnecessary + button)
+            Spacer(modifier = Modifier.size(24.dp))
         }
     }
 }
