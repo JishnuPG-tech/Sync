@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -150,6 +151,40 @@ fun ProfileSetupScreen(
     val isUsernameValid = syncUsername.trim().length >= 3 && syncUsername.trim().matches(Regex("^[a-zA-Z0-9._]+$"))
     val isFormValid = displayName.trim().isNotEmpty() && isUsernameValid && instagramHandle.trim().isNotEmpty() && !isSubmitting
 
+    
+    // Auto-extract Instagram avatar and profile details if not yet populated
+    LaunchedEffect(instagramHandle) {
+        if (instagramHandle.isNotBlank() && uploadedPhotoUrl.isNullOrBlank() && instagramAvatarUrl.isNullOrBlank()) {
+            isVerifyingInstagram = true
+            try {
+                val result = apiClient.verifyInstagram(instagramHandle)
+                val data = result.getOrNull()
+                if (data != null && data.exists) {
+                    isInstagramVerified = true
+                    if (!data.avatarUrl.isNullOrBlank()) {
+                        uploadedPhotoUrl = data.avatarUrl
+                        instagramAvatarUrl = data.avatarUrl
+                    }
+                    if (!data.fullName.isNullOrBlank()) {
+                        instagramFullName = data.fullName
+                        if (displayName.isBlank() || displayName == instagramHandle) {
+                            displayName = data.fullName!!
+                        }
+                    }
+                    if (!data.bio.isNullOrBlank()) {
+                        instagramBio = data.bio
+                        if (bio.isBlank()) {
+                            bio = data.bio!!.take(60)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                isVerifyingInstagram = false
+            }
+        }
+    }
+
     val scrollState = rememberScrollState()
 
     Column(
@@ -187,7 +222,7 @@ fun ProfileSetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            val currentPhotoSource = selectedPhotoUri?.toString() ?: uploadedPhotoUrl
+            val currentPhotoSource = selectedPhotoUri?.toString() ?: uploadedPhotoUrl ?: instagramAvatarUrl
 
             Box(
                 modifier = Modifier
@@ -488,6 +523,7 @@ fun ProfileSetupScreen(
                                                 val data = result.getOrNull()
                                                 // Store real Instagram profile info
                                                 if (!data?.avatarUrl.isNullOrBlank()) {
+                                                    uploadedPhotoUrl = data?.avatarUrl
                                                     instagramAvatarUrl = data?.avatarUrl
                                                 }
                                                 if (!data?.fullName.isNullOrBlank()) {
@@ -652,44 +688,7 @@ fun ProfileSetupScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // PRIVACY GUARANTEE BOX
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(AuraTheme.colors.surface)
-                .border(1.dp, AuraTheme.colors.border, RoundedCornerShape(14.dp))
-                .padding(14.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Shield,
-                    contentDescription = null,
-                    tint = AuraTheme.colors.success,
-                    modifier = Modifier.size(18.dp)
-                )
-                Column {
-                    Text(
-                        text = "Your profile, your choice",
-                        fontFamily = DmSansFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.5.sp,
-                        color = AuraTheme.colors.ink
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Nearby people see only your name, photo, and bio. Instagram is strictly locked until mutual agreement.",
-                        fontFamily = DmSansFontFamily,
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.sp,
-                        color = AuraTheme.colors.inkSecondary
-                    )
-                }
-            }
-        }
+
 
         if (submissionError != null) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -711,7 +710,7 @@ fun ProfileSetupScreen(
                     isSubmitting = true
                     submissionError = null
                     coroutineScope.launch {
-                        val avatarToSave = uploadedPhotoUrl ?: selectedPhotoUri?.toString()
+                        val avatarToSave = uploadedPhotoUrl ?: instagramAvatarUrl ?: selectedPhotoUri?.toString()
                         val result = apiClient.registerUser(
                             displayName = displayName,
                             syncUsername = syncUsername,

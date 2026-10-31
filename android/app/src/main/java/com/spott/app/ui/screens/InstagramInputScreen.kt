@@ -165,7 +165,7 @@ fun InstagramInputScreen(
         coroutineScope.launch {
             try {
                 // Quick gentle lookup for profile avatar/bio with 2-second timeout
-                val res = withTimeoutOrNull(2000) {
+                val res = withTimeoutOrNull(10000) {
                     apiClient.verifyInstagram(clean)
                 }
                 val profile = res?.getOrNull()
@@ -443,7 +443,7 @@ fun InstagramInputScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Loading profile...",
+                            text = "Extracting @" + instagramInput.trim().removePrefix("@") + "...",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp,
