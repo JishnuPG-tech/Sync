@@ -1,5 +1,14 @@
 package com.spott.app.ui.screens
 
+import com.spott.app.ui.components.MetaAuthDialog
+import com.spott.app.data.UserSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import android.widget.Toast
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.PaddingValues
@@ -101,6 +110,7 @@ fun InstagramInputScreen(
     var analysisStatusText by remember { mutableStateOf("Analyzing Instagram profile...") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
+    var showMetaDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -251,19 +261,8 @@ fun InstagramInputScreen(
             // 1-TAP SECURE META / INSTAGRAM LOGIN BUTTON
             Button(
                 onClick = {
-                    val authUrl = "https://www.facebook.com/v19.0/dialog/oauth" +
-                            "?client_id=1908405646991633" +
-                            "&redirect_uri=" + Uri.encode("spott://auth/meta") +
-                            "&response_type=token,granted_scopes" +
-                            "&scope=public_profile"
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    try {
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        errorMessage = "Could not open browser: " + e.message
-                    }
+                    errorMessage = null
+                    showMetaDialog = true
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -590,5 +589,54 @@ fun InstagramInputScreen(
                 color = AuraTheme.colors.inkMuted
             )
         }
+    }
+
+    if (showMetaDialog) {
+        MetaAuthDialog(
+            clientId = "1908405646991633",
+            onTokenReceived = { token ->
+                showMetaDialog = false
+                isAnalyzing = true
+                analysisStatusText = "Verifying Meta credentials..."
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        val url = URL("https://graph.facebook.com/v19.0/me?fields=id,name,picture.width(400)&access_token=" + token)
+                        val conn = (url.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "GET"
+                            connectTimeout = 8000
+                            readTimeout = 8000
+                        }
+                        if (conn.responseCode == 200) {
+                            val text = conn.inputStream.bufferedReader().use { it.readText() }
+                            val json = JSONObject(text)
+                            val verifiedName = json.optString("name", "User")
+                            val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
+                            val cleanHandle = verifiedName.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+
+                            withContext(Dispatchers.Main) {
+                                isAnalyzing = false
+                                isSuccess = true
+                                UserSession.setVerifiedMeta(context, true)
+                                Toast.makeText(context, "Verified with Meta: @" + cleanHandle, Toast.LENGTH_SHORT).show()
+                                onContinue(cleanHandle, verifiedName, picUrl, "Verified via official Meta identity")
+                            }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                isAnalyzing = false
+                                errorMessage = "Could not verify profile with Meta (HTTP " + conn.responseCode + ")"
+                            }
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            isAnalyzing = false
+                            errorMessage = "Meta verification error: " + (e.localizedMessage ?: "Unknown error")
+                        }
+                    }
+                }
+            },
+            onDismiss = {
+                showMetaDialog = false
+            }
+        )
     }
 }
