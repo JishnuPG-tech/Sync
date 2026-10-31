@@ -3,12 +3,6 @@ import android.app.Activity
 import android.os.Bundle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedButton
-import com.facebook.CallbackManager
-import com.facebook.FacebookCallback
-import com.facebook.FacebookException
-import com.facebook.GraphRequest
-import com.facebook.login.LoginManager
-import com.facebook.login.LoginResult
 
 import com.spott.app.ui.components.MetaAuthDialog
 import com.spott.app.data.UserSession
@@ -112,7 +106,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun InstagramInputScreen(
     initialHandle: String = "",
-    callbackManager: CallbackManager? = null,
     onContinue: (
         instagramHandle: String,
         extractedFullName: String?,
@@ -178,61 +171,7 @@ fun InstagramInputScreen(
 
 
     
-    fun startMetaLogin() {
-        val act = context as? Activity
-        val cm = callbackManager ?: (context as? com.spott.app.MainActivity)?.callbackManager
-        if (act == null || cm == null) {
-            errorMessage = "Activity context unavailable for Meta SSO"
-            return
-        }
 
-        isAnalyzing = true
-        analysisStatusText = "Connecting to Meta authorization..."
-        errorMessage = null
-
-        val loginManager = LoginManager.getInstance()
-        loginManager.registerCallback(cm, object : FacebookCallback<LoginResult> {
-            override fun onSuccess(result: LoginResult) {
-                analysisStatusText = "Extracting verified profile..."
-                val request = GraphRequest.newMeRequest(result.accessToken) { json, _ ->
-                    if (json != null) {
-                        val name = json.optString("name", "User")
-                        val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
-                        val cleanHandle = name.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
-
-                        isAnalyzing = false
-                        isSuccess = true
-                        UserSession.setVerifiedMeta(context, true)
-                        Toast.makeText(context, "Verified with Meta: @" + cleanHandle, Toast.LENGTH_SHORT).show()
-                        onContinue(cleanHandle, name, picUrl, "Verified via official Meta identity")
-                    } else {
-                        isAnalyzing = false
-                        errorMessage = "Failed to extract profile information from Meta"
-                    }
-                }
-                val parameters = Bundle().apply {
-                    putString("fields", "id,name,picture.width(500),email")
-                }
-                request.parameters = parameters
-                request.executeAsync()
-            }
-
-            override fun onCancel() {
-                isAnalyzing = false
-                Toast.makeText(context, "Meta login cancelled", Toast.LENGTH_SHORT).show()
-            }
-
-            override fun onError(error: FacebookException) {
-                isAnalyzing = false
-                errorMessage = "Meta authorization error: " + (error.localizedMessage ?: "Unknown error")
-            }
-        })
-
-        loginManager.logInWithReadPermissions(
-            act,
-            listOf("public_profile", "email")
-        )
-    }
 
     fun performAnalysis() {
         val clean = instagramInput.trim().removePrefix("@").lowercase()
@@ -349,7 +288,7 @@ fun InstagramInputScreen(
 
             // Main Heading
             Text(
-                text = "Connect to Spott",
+                text = "Connect to Instagram",
                 fontFamily = PlayfairFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 30.sp,
@@ -362,7 +301,7 @@ fun InstagramInputScreen(
 
             // Subtitle explanation
             Text(
-                text = "Authorize with 1-tap Meta / Instagram to import your real profile, or enter your handle manually below.",
+                text = "Redirect directly to the official Instagram app to verify your identity and import your real Instagram profile.",
                 fontFamily = DmSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.5.sp,
@@ -374,11 +313,11 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1-TAP SECURE META / INSTAGRAM LOGIN WITH REAL PROFILE PERMISSIONS
+            // 1-TAP REDIRECT DIRECTLY TO OFFICIAL INSTAGRAM APP
             Button(
                 onClick = {
                     errorMessage = null
-                    startMetaLogin()
+                    launchOfficialInstagramApk(context, instagramInput)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -409,13 +348,13 @@ fun InstagramInputScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Shield,
-                            contentDescription = "Verified Meta Login",
+                            contentDescription = "Official Instagram App",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Continue with Meta / Instagram",
+                            text = if (instagramInput.isNotBlank()) "Open @" + instagramInput + " in Instagram" else "Open in Official Instagram App",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -427,10 +366,19 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Secondary option: Launch installed Instagram App
+            // Web OAuth to Instagram (instagram.com only - NEVER facebook.com)
             OutlinedButton(
                 onClick = {
-                    launchOfficialInstagramApk(context, instagramInput)
+                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?client_id=1908405646991633&redirect_uri=spott://auth/instagram&response_type=code&scope=user_profile"
+                    try {
+                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(igOAuthUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(webIntent)
+                        Toast.makeText(context, "Redirecting to instagram.com...", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        launchOfficialInstagramApk(context, instagramInput)
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -446,7 +394,7 @@ fun InstagramInputScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Open Installed Instagram App ↗",
+                        text = "Authorize via instagram.com ↗",
                         fontFamily = DmSansFontFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,

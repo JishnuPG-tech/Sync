@@ -1,7 +1,6 @@
 package com.spott.app
 
 import android.net.Uri
-import com.facebook.CallbackManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -81,12 +80,6 @@ enum class AppNavState {
 }
 
 class MainActivity : ComponentActivity() {
-    val callbackManager: CallbackManager = CallbackManager.Factory.create()
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        callbackManager.onActivityResult(requestCode, resultCode, data)
-        super.onActivityResult(requestCode, resultCode, data)
-    }
 
 
     private var onPermissionsUpdated: (() -> Unit)? = null
@@ -628,7 +621,6 @@ class MainActivity : ComponentActivity() {
                         AppNavState.INSTAGRAM_INPUT -> {
                             InstagramInputScreen(
                                 initialHandle = currentInstagramHandle,
-                                callbackManager = callbackManager,
                                 onContinue = { igHandle, igFullName, igAvatar, igBio ->
                                     currentInstagramHandle = igHandle
                                     if (!igFullName.isNullOrBlank()) {
