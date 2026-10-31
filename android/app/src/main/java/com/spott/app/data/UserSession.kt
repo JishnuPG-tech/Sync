@@ -103,6 +103,13 @@ object UserSession {
         getPrefs(context).edit().putBoolean(KEY_IS_ADMIN_UNLOCKED, unlocked).apply()
     }
 
+    fun isVerifiedMeta(context: Context): Boolean =
+        getPrefs(context).getBoolean("is_verified_meta", false)
+
+    fun setVerifiedMeta(context: Context, verified: Boolean) {
+        getPrefs(context).edit().putBoolean("is_verified_meta", verified).apply()
+    }
+
     fun clear(context: Context) {
         getPrefs(context).edit().clear().apply()
     }

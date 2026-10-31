@@ -48,6 +48,13 @@
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+                <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,6 +70,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="spott" android:host="auth" />
+                <data android:scheme="fb1908405646991633" />
                 <data android:scheme="syncapp" android:host="auth" />
             </intent-filter>
         </activity>

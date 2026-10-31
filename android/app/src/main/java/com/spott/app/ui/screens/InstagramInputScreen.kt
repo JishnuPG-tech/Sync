@@ -1,5 +1,10 @@
 package com.spott.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -97,6 +102,7 @@ fun InstagramInputScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val apiClient = remember { SyncApiClient() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -217,7 +223,7 @@ fun InstagramInputScreen(
 
             // Main Heading
             Text(
-                text = "Enter your Instagram",
+                text = "Connect to Spott",
                 fontFamily = PlayfairFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 30.sp,
@@ -230,7 +236,7 @@ fun InstagramInputScreen(
 
             // Subtitle explanation
             Text(
-                text = "Sync will automatically extract your profile photo, display name, and bio so you don't have to enter them manually.",
+                text = "Verify your real-world identity with 1-tap Meta authentication, or enter your Instagram handle manually.",
                 fontFamily = DmSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.5.sp,
@@ -241,6 +247,98 @@ fun InstagramInputScreen(
             )
 
             Spacer(modifier = Modifier.height(28.dp))
+
+            // 1-TAP SECURE META / INSTAGRAM LOGIN BUTTON
+            Button(
+                onClick = {
+                    val authUrl = "https://www.facebook.com/v19.0/dialog/oauth" +
+                            "?client_id=1908405646991633" +
+                            "&redirect_uri=" + Uri.encode("spott://auth/meta") +
+                            "&response_type=token,granted_scopes" +
+                            "&scope=public_profile"
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        errorMessage = "Could not open browser: " + e.message
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent
+                ),
+                contentPadding = PaddingValues()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF833AB4), // Instagram Purple
+                                    Color(0xFFFD1D1D), // Crimson
+                                    Color(0xFFFCB045)  // Warm Amber
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Shield,
+                            contentDescription = "Verified by Meta",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Continue with Meta / Instagram",
+                            fontFamily = DmSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Divider: OR ENTER MANUALLY
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .background(AuraTheme.colors.border)
+                )
+                Text(
+                    text = "OR ENTER MANUALLY",
+                    fontFamily = DmMonoFontFamily,
+                    fontSize = 10.sp,
+                    color = AuraTheme.colors.inkMuted,
+                    modifier = Modifier.padding(horizontal = 10.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .background(AuraTheme.colors.border)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             // CENTERED INPUT BOX
             Box(

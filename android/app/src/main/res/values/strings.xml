@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Spott</string>
+    <string name="facebook_app_id">1908405646991633</string>
+    <string name="fb_login_protocol_scheme">fb1908405646991633</string>
+    <string name="facebook_client_token">da79eae8da2a1d31961031e2d65b416f</string>
+</resources>

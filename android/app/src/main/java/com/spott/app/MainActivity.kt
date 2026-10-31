@@ -1,5 +1,12 @@
 package com.spott.app
 
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
 import com.spott.app.proximity.SyncRadarService
 import com.spott.app.proximity.FilteredBleObservation
 import android.Manifest
@@ -75,6 +82,16 @@ enum class AppNavState {
 class MainActivity : ComponentActivity() {
 
     private var onPermissionsUpdated: (() -> Unit)? = null
+    private var onOAuthCallback: ((Uri) -> Unit)? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { uri ->
+            onOAuthCallback?.invoke(uri)
+        }
+    }
+
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -234,6 +251,61 @@ class MainActivity : ComponentActivity() {
                     } else if (manual) {
                         android.widget.Toast.makeText(this@MainActivity, "Couldn't check for updates. Check connection.", android.widget.Toast.LENGTH_SHORT).show()
                     }
+                }
+            }
+
+            // OAuth Deep Link Handler for Meta / Instagram Login
+            DisposableEffect(Unit) {
+                onOAuthCallback = { uri ->
+                    val fragment = uri.fragment ?: ""
+                    val query = uri.query ?: ""
+                    val raw = if (fragment.isNotEmpty()) fragment else query
+                    val params = raw.split("&").associate {
+                        val parts = it.split("=")
+                        if (parts.size == 2) parts[0] to parts[1] else "" to ""
+                    }
+                    val token = params["access_token"] ?: uri.getQueryParameter("code")
+                    if (!token.isNullOrBlank()) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                val url = URL("https://graph.facebook.com/v19.0/me?fields=id,name,picture.width(400)&access_token=" + token)
+                                val conn = (url.openConnection() as HttpURLConnection).apply {
+                                    requestMethod = "GET"
+                                    connectTimeout = 8000
+                                    readTimeout = 8000
+                                }
+                                if (conn.responseCode == 200) {
+                                    val text = conn.inputStream.bufferedReader().use { it.readText() }
+                                    val json = JSONObject(text)
+                                    val verifiedName = json.optString("name", "User")
+                                    val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
+                                    val cleanHandle = verifiedName.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+
+                                    withContext(Dispatchers.Main) {
+                                        currentDisplayName = verifiedName
+                                        currentSyncUsername = cleanHandle
+                                        currentInstagramHandle = cleanHandle
+                                        if (!picUrl.isNullOrBlank()) {
+                                            currentAvatarAsset = picUrl
+                                        }
+                                        UserSession.setVerifiedMeta(this@MainActivity, true)
+                                        android.widget.Toast.makeText(this@MainActivity, "Verified with Meta: @" + cleanHandle, android.widget.Toast.LENGTH_SHORT).show()
+                                        navState = AppNavState.SETUP
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(this@MainActivity, "Meta authorization received!", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                intent?.data?.let { onOAuthCallback?.invoke(it) }
+
+                onDispose {
+                    onOAuthCallback = null
                 }
             }
 
