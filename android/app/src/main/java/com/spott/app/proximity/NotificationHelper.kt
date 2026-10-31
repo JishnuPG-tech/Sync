@@ -38,18 +38,19 @@ object NotificationHelper {
                 enableLights(false)
             }
 
-            // 2. High-Priority Alert Channel for Detected Peers
+            // 2. High-Priority Alert Channel for Detected Peers (Heads-Up Banner)
             val encounterChannel = NotificationChannel(
                 CHANNEL_ENCOUNTERS_ID,
-                "Nearby Peer Alerts",
+                "Spott Nearby Proximity Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Immediate notification when a new person is detected nearby"
+                description = "Immediate heads-up alert when a new person is spotted nearby"
                 setShowBadge(true)
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 180, 80, 220)
+                vibrationPattern = longArrayOf(0, 200, 100, 250)
                 enableLights(true)
-                lightColor = 0xFFCF7052.toInt() // Terracotta glow
+                lightColor = 0xFFF59E0B.toInt() // Spott Amber
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
             manager.createNotificationChannel(statusChannel)
@@ -121,25 +122,27 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = if (displayName.isNotBlank() && !displayName.equals("Nearby Sync User", ignoreCase = true)) {
-            "✨ $displayName (@$cleanHandle) is nearby!"
+        val title = if (displayName.isNotBlank() && !displayName.equals("Nearby Sync User", ignoreCase = true) && !displayName.equals(cleanHandle, ignoreCase = true)) {
+            "👋 $displayName (@$cleanHandle) is nearby!"
         } else {
-            "✨ @$cleanHandle is nearby!"
+            "👋 @$cleanHandle spotted nearby!"
         }
 
-        val text = "Detected in physical proximity (~$distanceDisplay). Tap to view profile."
+        val text = "Detected ~$distanceDisplay away · Tap to connect on Instagram."
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ENCOUNTERS_ID)
-            .setSmallIcon(R.drawable.sync_emblem)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\nInstagram ID: @$cleanHandle"))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\nInstagram Profile: @$cleanHandle"))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(syncPendingIntent)
-            .addAction(0, "Open Instagram", igPendingIntent)
-            .addAction(0, "View in Sync", syncPendingIntent)
+            .addAction(0, "Open Instagram ↗", igPendingIntent)
+            .addAction(0, "View in Spott", syncPendingIntent)
             .build()
 
         val notifId = PEER_NOTIFICATION_BASE_ID + (cleanHandle.hashCode() and 0x7FFF)

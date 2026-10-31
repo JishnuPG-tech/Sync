@@ -1,19 +1,20 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from typing import Dict, Set
 from app.config import settings
 from app.routers import users, radar, connections
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
+    title="Spott API",
     version=settings.VERSION,
-    description="Privacy-first proximity discovery API — Sync App (Powered by Supabase).",
+    description="Privacy-first proximity discovery API — Spott (High-Speed Cloud Engine).",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# CORS — allow Android APK, web clients, Render preview URLs
+# CORS — allow Android APK, web clients, previews
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,11 +34,49 @@ app.include_router(users.router, prefix=settings.API_V1_STR)
 app.include_router(radar.router, prefix=settings.API_V1_STR)
 app.include_router(connections.router, prefix=settings.API_V1_STR)
 
+# Real-Time WebSocket Connection Manager for Live Radar Streaming
+class RadarStreamManager:
+    def __init__(self):
+        self.active_streams: Dict[str, Set[WebSocket]] = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket):
+        await websocket.accept()
+        if user_id not in self.active_streams:
+            self.active_streams[user_id] = set()
+        self.active_streams[user_id].add(websocket)
+
+    def disconnect(self, user_id: str, websocket: WebSocket):
+        if user_id in self.active_streams:
+            self.active_streams[user_id].discard(websocket)
+            if not self.active_streams[user_id]:
+                del self.active_streams[user_id]
+
+    async def broadcast_nearby_event(self, target_user_id: str, event_data: dict):
+        if target_user_id in self.active_streams:
+            for ws in list(self.active_streams[target_user_id]):
+                try:
+                    await ws.send_json(event_data)
+                except Exception:
+                    pass
+
+radar_stream_manager = RadarStreamManager()
+
+@app.websocket("/api/v1/radar/stream/{user_id}")
+async def websocket_radar_endpoint(websocket: WebSocket, user_id: str):
+    await radar_stream_manager.connect(user_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        radar_stream_manager.disconnect(user_id, websocket)
+
 @app.get("/", tags=["Root"])
 def root():
     return {
         "status": "online",
-        "service": settings.PROJECT_NAME,
+        "service": "Spott API",
         "docs": "/docs",
         "health": "/health"
     }
@@ -46,8 +85,9 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "service": settings.PROJECT_NAME,
+        "service": "Spott API",
         "version": settings.VERSION,
-        "storage": "supabase" if settings.SUPABASE_URL else "local",
-        "database": "supabase_rest_api"
+        "engine": "Hermes Cloud Xeon Platinum",
+        "database": "sqlite_wal_fast",
+        "uptime": "24/7"
     }

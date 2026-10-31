@@ -30,19 +30,17 @@ data class InstagramVerificationResult(
 typealias bool_val = Boolean
 
 object SyncApiConfig {
-    // Production URL on Render
+    // 24/7 Ultra-Fast Xeon Cloud Backend on HuggingFace Space
+    const val CLOUD_URL: String = "https://jishnupg-hermes.hf.space"
     const val RENDER_URL: String = "https://sync-enoc.onrender.com"
 
-    // Local dev fallbacks
-    // 127.0.0.1:8000 works with `adb reverse tcp:8000 tcp:8000`
-    // 10.0.2.2:8000 works on the standard Android Emulator
     val candidateBaseUrls: List<String> = buildList {
+        add(CLOUD_URL)
         if (RENDER_URL.isNotBlank()) add(RENDER_URL)
         add("http://127.0.0.1:8000")
         add("http://10.0.2.2:8000")
-        add("http://10.41.89.246:8000")
     }
-    var activeBaseUrl: String = RENDER_URL
+    var activeBaseUrl: String = CLOUD_URL
 }
 
 class SyncApiClient {

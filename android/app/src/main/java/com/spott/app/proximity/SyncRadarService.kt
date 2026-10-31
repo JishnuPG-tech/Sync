@@ -6,10 +6,18 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.spott.app.data.UserSession
+import com.spott.app.data.network.SyncApiClient
+
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
-import com.spott.app.data.UserSession
 import java.util.concurrent.ConcurrentHashMap
 
 class SyncRadarService : Service() {
@@ -95,6 +103,8 @@ class SyncRadarService : Service() {
     private var thermalController: ThermalAndBatteryController? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var isAppInForeground: Boolean = true
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val apiClient = SyncApiClient()
 
     override fun onCreate() {
         isServiceRunning = true
@@ -179,10 +189,10 @@ class SyncRadarService : Service() {
 
         val rawToken = observation.deviceToken
         val now = SystemClock.elapsedRealtime()
-        val dedupKey = if (igHandle.isNotBlank()) igHandle.lowercase() else rawToken
+        val dedupKey = rawToken.lowercase()
         val lastAlertTime = lastNotifiedMap[dedupKey] ?: 0L
 
-        // 3. Post Instant Alert Notification if cooldown elapsed (>5 min)
+        // 3. Post Instant Heads-Up Alert Notification (5-min cooldown per device)
         if (now - lastAlertTime > NOTIFICATION_COOLDOWN_MS) {
             lastNotifiedMap[dedupKey] = now
 
@@ -192,14 +202,38 @@ class SyncRadarService : Service() {
                 ProximityTier.EXTENDED -> "28m • In Range"
             }
 
-            Log.i(TAG, "Firing Peer Alert Notification for @$igHandle ($distDisplay)")
-            NotificationHelper.postPeerDetectedNotification(
-                context = this,
-                instagramHandle = if (igHandle.isNotBlank()) igHandle else "sync_user",
-                displayName = displayName.ifBlank { "Nearby Sync User" },
-                distanceDisplay = distDisplay,
-                encounterId = rawToken
-            )
+            serviceScope.launch {
+                try {
+                    val myUserId = UserSession.getUserId(this@SyncRadarService) ?: ""
+                    var resolvedIg = igHandle
+                    var resolvedName = displayName
+
+                    // If over-the-air BLE packet only had token, resolve identity via backend
+                    if (resolvedIg.isBlank() && myUserId.isNotBlank()) {
+                        val res = apiClient.resolveBleToken(myUserId, rawToken)
+                        val card = res.getOrNull()
+                        if (card != null) {
+                            resolvedIg = card.instagramUsername ?: card.displayName
+                            resolvedName = card.displayName
+                        }
+                    }
+
+                    if (resolvedIg.isBlank()) resolvedIg = "someone"
+                    if (resolvedName.isBlank()) resolvedName = resolvedIg
+
+                    withContext(Dispatchers.Main) {
+                        NotificationHelper.postPeerDetectedNotification(
+                            context = this@SyncRadarService,
+                            instagramHandle = resolvedIg,
+                            displayName = resolvedName,
+                            distanceDisplay = distDisplay,
+                            encounterId = rawToken
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to resolve and alert peer: " + e.message)
+                }
+            }
         }
     }
 
@@ -275,6 +309,7 @@ class SyncRadarService : Service() {
 
     override fun onDestroy() {
         isServiceRunning = false
+        serviceScope.cancel()
         super.onDestroy()
         Log.i(TAG, "SyncRadarService onDestroy")
         stopRadarEngine()
