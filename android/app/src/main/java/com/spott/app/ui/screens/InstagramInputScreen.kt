@@ -313,11 +313,20 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1-TAP REDIRECT DIRECTLY TO OFFICIAL INSTAGRAM APP
+            // PRIMARY: CONNECT WITH INSTAGRAM OAUTH CONSENT FLOW
             Button(
                 onClick = {
                     errorMessage = null
-                    launchOfficialInstagramApk(context, instagramInput)
+                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=1093422740163798&redirect_uri=https://jishnupg-hermes.hf.space/auth/instagram&response_type=code&scope=instagram_business_basic"
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(igOAuthUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        Toast.makeText(context, "Redirecting to Instagram consent screen...", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        errorMessage = "Could not open Instagram OAuth: " + (e.localizedMessage ?: "Unknown error")
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -348,16 +357,16 @@ fun InstagramInputScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Shield,
-                            contentDescription = "Official Instagram App",
+                            contentDescription = "Connect with Instagram",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = if (instagramInput.isNotBlank()) "Open @" + instagramInput + " in Instagram" else "Open in Official Instagram App",
+                            text = "Connect with Instagram",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             color = Color.White
                         )
                     }
@@ -366,19 +375,10 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Web OAuth to Instagram (instagram.com only - NEVER facebook.com)
+            // SECONDARY: Open Installed Instagram App
             OutlinedButton(
                 onClick = {
-                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?client_id=1093422740163798&redirect_uri=https://jishnupg-hermes.hf.space/auth/instagram&response_type=code&scope=instagram_business_basic"
-                    try {
-                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(igOAuthUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(webIntent)
-                        Toast.makeText(context, "Redirecting to instagram.com...", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        launchOfficialInstagramApk(context, instagramInput)
-                    }
+                    launchOfficialInstagramApk(context, instagramInput)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -394,7 +394,7 @@ fun InstagramInputScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Authorize via instagram.com ↗",
+                        text = "Open Installed Instagram App ↗",
                         fontFamily = DmSansFontFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,

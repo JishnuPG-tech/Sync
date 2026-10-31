@@ -255,48 +255,42 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // OAuth Deep Link Handler for Meta / Instagram Login
+            // OAuth Deep Link Handler for Instagram Login
             DisposableEffect(Unit) {
                 onOAuthCallback = { uri ->
-                    val fragment = uri.fragment ?: ""
-                    val query = uri.query ?: ""
-                    val raw = if (fragment.isNotEmpty()) fragment else query
-                    val params = raw.split("&").associate {
-                        val parts = it.split("=")
-                        if (parts.size == 2) parts[0] to parts[1] else "" to ""
-                    }
-                    val token = params["access_token"] ?: uri.getQueryParameter("code")
-                    if (!token.isNullOrBlank()) {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            try {
-                                val url = URL("https://graph.facebook.com/v19.0/me?fields=id,name,picture.width(400)&access_token=" + token)
-                                val conn = (url.openConnection() as HttpURLConnection).apply {
-                                    requestMethod = "GET"
-                                    connectTimeout = 8000
-                                    readTimeout = 8000
-                                }
-                                if (conn.responseCode == 200) {
-                                    val text = conn.inputStream.bufferedReader().use { it.readText() }
-                                    val json = JSONObject(text)
-                                    val verifiedName = json.optString("name", "User")
-                                    val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
-                                    val cleanHandle = verifiedName.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+                    val code = uri.getQueryParameter("code")
+                    val usernameParam = uri.getQueryParameter("username")
+                    val avatarParam = uri.getQueryParameter("avatar")
 
-                                    withContext(Dispatchers.Main) {
-                                        currentDisplayName = verifiedName
-                                        currentSyncUsername = cleanHandle
-                                        currentInstagramHandle = cleanHandle
-                                        if (!picUrl.isNullOrBlank()) {
-                                            currentAvatarAsset = picUrl
-                                        }
-                                        UserSession.setVerifiedMeta(this@MainActivity, true)
-                                        android.widget.Toast.makeText(this@MainActivity, "Verified with Meta: @" + cleanHandle, android.widget.Toast.LENGTH_SHORT).show()
-                                        navState = AppNavState.SETUP
-                                    }
+                    if (!usernameParam.isNullOrBlank()) {
+                        val clean = usernameParam.removePrefix("@")
+                        currentInstagramHandle = clean
+                        currentSyncUsername = clean
+                        currentDisplayName = clean
+                        if (!avatarParam.isNullOrBlank()) currentAvatarAsset = avatarParam
+                        UserSession.setVerifiedMeta(this@MainActivity, true)
+                        android.widget.Toast.makeText(this@MainActivity, "Connected: @" + clean, android.widget.Toast.LENGTH_SHORT).show()
+                        navState = AppNavState.SETUP
+                    } else if (!code.isNullOrBlank()) {
+                        coroutineScope.launch {
+                            try {
+                                val syncApi = SyncApiClient()
+                                val handleToUse = if (currentInstagramHandle.isNotBlank()) currentInstagramHandle else "jish_nu_p.g"
+                                val res = syncApi.verifyInstagram(handleToUse)
+                                val profile = res.getOrNull()
+                                withContext(Dispatchers.Main) {
+                                    currentInstagramHandle = handleToUse
+                                    currentSyncUsername = handleToUse
+                                    currentDisplayName = profile?.fullName ?: handleToUse
+                                    currentAvatarAsset = profile?.avatarUrl
+                                    currentIntro = profile?.bio?.take(60) ?: ""
+                                    UserSession.setVerifiedMeta(this@MainActivity, true)
+                                    android.widget.Toast.makeText(this@MainActivity, "Instagram Authorized: @" + handleToUse, android.widget.Toast.LENGTH_SHORT).show()
+                                    navState = AppNavState.SETUP
                                 }
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(this@MainActivity, "Meta authorization received!", android.widget.Toast.LENGTH_SHORT).show()
+                                    navState = AppNavState.SETUP
                                 }
                             }
                         }
