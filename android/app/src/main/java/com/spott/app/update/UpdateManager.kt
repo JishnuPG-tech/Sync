@@ -198,13 +198,28 @@ object UpdateManager {
      */
     fun launchInstall(context: Context, apkFile: File) {
         try {
+            // Also ensure copy exists in public Downloads for fallback
+            try {
+                val pubDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                if (pubDir.exists()) {
+                    val pubFile = File(pubDir, "Spott-debug.apk")
+                    apkFile.copyTo(pubFile, overwrite = true)
+                }
+            } catch (_: Exception) {}
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Please enable 'Allow from this source' to install the update",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                     val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                         data = Uri.parse("package:" + context.packageName)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(manageIntent)
+                    return
                 }
             }
 
@@ -216,12 +231,24 @@ object UpdateManager {
 
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             }
+
+            val resolveList = context.packageManager.queryIntentActivities(installIntent, 0)
+            for (resolveInfo in resolveList) {
+                val pkgName = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(pkgName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            android.widget.Toast.makeText(context, "Opening installer...", android.widget.Toast.LENGTH_SHORT).show()
             context.startActivity(installIntent)
             Log.i(TAG, "Launched Package Installer with URI: " + uri)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch installer: " + e.message, e)
+            android.widget.Toast.makeText(context, "Could not open installer: " + e.localizedMessage, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }

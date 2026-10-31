@@ -185,15 +185,21 @@ fun UpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        LinearProgressIndicator(
-                            progress = { downloadProgress },
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(6.dp)
-                                .clip(RoundedCornerShape(999.dp)),
-                            color = AuraTheme.colors.accent,
-                            trackColor = AuraTheme.colors.surfaceSubtle
-                        )
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(AuraTheme.colors.surfaceSubtle)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(downloadProgress.coerceIn(0f, 1f))
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(AuraTheme.colors.accent)
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         val pct = (downloadProgress * 100).toInt()
                         Text(
