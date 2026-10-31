@@ -12,8 +12,8 @@ android {
         applicationId = "com.spott.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.2.0"
+        versionCode = 3
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -40,7 +40,6 @@ android {
 }
 
 dependencies {
-    implementation("com.facebook.android:facebook-login:17.0.2")
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

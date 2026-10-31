@@ -1,36 +1,12 @@
 package com.spott.app.ui.screens
-import android.app.Activity
-import android.os.Bundle
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.material3.OutlinedButton
-
-import com.spott.app.ui.components.MetaAuthDialog
-import com.spott.app.data.UserSession
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import android.widget.Toast
 
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.compose.runtime.DisposableEffect
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.ui.platform.LocalContext
-
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,14 +35,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,19 +53,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.spott.app.data.network.SyncApiClient
 import com.spott.app.ui.components.SyncBrandLockup
 import com.spott.app.ui.theme.AuraTheme
@@ -95,13 +75,14 @@ import com.spott.app.ui.theme.DmMonoFontFamily
 import com.spott.app.ui.theme.DmSansFontFamily
 import com.spott.app.ui.theme.PlayfairFontFamily
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Primary Instagram Input Screen
- * - Centered, minimalist design matching the APK's dark amber/cyber theme.
- * - Single-purpose input for Instagram handle.
- * - Analyzes & validates the Instagram account in real-time.
- * - Extracts profile picture, full name, bio, and handle, then forwards them to ProfileSetupScreen.
+ * Clean Instagram Input Screen
+ * - Normal username input only (no authentication, no OAuth, no logins, no passwords).
+ * - Fast, seamless profile transition.
+ * - Auto-detects clipboard handle.
+ * - Optional instant profile extraction in background without blocking.
  */
 @Composable
 fun InstagramInputScreen(
@@ -116,11 +97,9 @@ fun InstagramInputScreen(
     modifier: Modifier = Modifier
 ) {
     var instagramInput by remember { mutableStateOf(initialHandle.removePrefix("@")) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var analysisStatusText by remember { mutableStateOf("Analyzing Instagram profile...") }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var detectedClipboardHandle by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var isSuccess by remember { mutableStateOf(false) }
-    var showMetaDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -128,38 +107,41 @@ fun InstagramInputScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
 
-    // Clipboard auto-detection: when returning from Instagram app, auto-fill copied username
+    // Clipboard auto-detection helper
+    fun checkClipboard() {
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            if (clipboard != null && clipboard.hasPrimaryClip()) {
+                val clip = clipboard.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val text = clip.getItemAt(0)?.text?.toString()?.trim() ?: ""
+                    if (text.isNotEmpty()) {
+                        val extracted = when {
+                            text.contains("instagram.com/") -> {
+                                text.substringAfter("instagram.com/")
+                                    .substringBefore("?")
+                                    .substringBefore("/")
+                                    .removePrefix("@")
+                                    .trim()
+                            }
+                            text.startsWith("@") -> text.removePrefix("@").trim()
+                            else -> text.trim()
+                        }
+                        if (extracted.matches(Regex("^[a-zA-Z0-9._]{1,30}$")) && extracted != instagramInput) {
+                            detectedClipboardHandle = extracted
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     val lifecycleOwner = context as? LifecycleOwner
     if (lifecycleOwner != null) {
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    try {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        if (clipboard != null && clipboard.hasPrimaryClip()) {
-                            val clip = clipboard.primaryClip
-                            if (clip != null && clip.itemCount > 0) {
-                                val text = clip.getItemAt(0)?.text?.toString()?.trim() ?: ""
-                                if (text.isNotEmpty()) {
-                                    val extracted = when {
-                                        text.contains("instagram.com/") -> {
-                                            text.substringAfter("instagram.com/")
-                                                .substringBefore("?")
-                                                .substringBefore("/")
-                                                .removePrefix("@")
-                                                .trim()
-                                        }
-                                        text.startsWith("@") -> text.removePrefix("@").trim()
-                                        else -> ""
-                                    }
-                                    if (extracted.matches(Regex("^[a-zA-Z0-9._]{1,30}$")) && instagramInput.isEmpty()) {
-                                        instagramInput = extracted
-                                        Toast.makeText(context, "Detected @" + extracted + " from clipboard!", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {}
+                    checkClipboard()
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -169,46 +151,39 @@ fun InstagramInputScreen(
         }
     }
 
-
-    
-
-
-    fun performAnalysis() {
+    fun submitUsername() {
         val clean = instagramInput.trim().removePrefix("@").lowercase()
         if (clean.isBlank()) {
-            errorMessage = "Please enter your Instagram username"
+            errorMessage = "Please enter your Instagram username (or tap Skip)"
             return
         }
 
         keyboardController?.hide()
-        isAnalyzing = true
+        isSubmitting = true
         errorMessage = null
-        analysisStatusText = "Connecting..."
 
         coroutineScope.launch {
             try {
-                analysisStatusText = "Extracting profile data for @$clean..."
-                val result = apiClient.verifyInstagram(clean)
-
-                if (result.isSuccess && result.getOrNull()?.exists == true) {
-                    val profile = result.getOrNull()!!
-                    isSuccess = true
-                    analysisStatusText = "Profile verified!"
-                    kotlinx.coroutines.delay(400)
+                // Quick gentle lookup for profile avatar/bio with 2-second timeout
+                val res = withTimeoutOrNull(2000) {
+                    apiClient.verifyInstagram(clean)
+                }
+                val profile = res?.getOrNull()
+                if (profile != null && profile.exists) {
                     onContinue(
                         clean,
-                        profile.fullName,
+                        profile.fullName ?: clean,
                         profile.avatarUrl,
                         profile.bio
                     )
                 } else {
-                    val errMsg = result.getOrNull()?.error ?: "Could not fetch Instagram profile for @$clean"
-                    errorMessage = errMsg
+                    // Seamless fallback: proceed directly with handle
+                    onContinue(clean, clean, null, null)
                 }
-            } catch (e: Exception) {
-                errorMessage = "Network error while reaching Instagram service: ${e.localizedMessage ?: "Unknown error"}"
+            } catch (_: Exception) {
+                onContinue(clean, clean, null, null)
             } finally {
-                isAnalyzing = false
+                isSubmitting = false
             }
         }
     }
@@ -251,18 +226,15 @@ fun InstagramInputScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // CENTER SECTION: Glowing icon, Heading, Input, and Action Button
+        // CENTER SECTION: Card & Inputs
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Instagram / Aura badge icon
+            // Instagram badge
             Box(
                 modifier = Modifier
-                    .size(76.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
@@ -276,32 +248,32 @@ fun InstagramInputScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "IG",
+                    text = "@",
                     fontFamily = DmMonoFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
+                    fontSize = 32.sp,
                     color = AuraTheme.colors.accent
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Main Heading
+            // Heading
             Text(
-                text = "Connect to Instagram",
+                text = "Enter your Instagram",
                 fontFamily = PlayfairFontFamily,
                 fontWeight = FontWeight.Medium,
-                fontSize = 30.sp,
-                letterSpacing = (-0.03).sp,
+                fontSize = 28.sp,
+                letterSpacing = (-0.02).sp,
                 color = AuraTheme.colors.ink,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Subtitle explanation
+            // Subtitle
             Text(
-                text = "Redirect directly to the official Instagram app to verify your identity and import your real Instagram profile.",
+                text = "Connect your Instagram handle so nearby peers on radar can view and follow your profile.",
                 fontFamily = DmSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.5.sp,
@@ -311,133 +283,46 @@ fun InstagramInputScreen(
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // PRIMARY: CONNECT WITH INSTAGRAM OAUTH CONSENT FLOW
-            Button(
-                onClick = {
-                    errorMessage = null
-                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=1093422740163798&redirect_uri=https://jishnupg-hermes.hf.space/auth/instagram&response_type=code&scope=instagram_business_basic"
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(igOAuthUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                        Toast.makeText(context, "Redirecting to Instagram consent screen...", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        errorMessage = "Could not open Instagram OAuth: " + (e.localizedMessage ?: "Unknown error")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent
-                ),
-                contentPadding = PaddingValues()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF833AB4), // Instagram Purple
-                                    Color(0xFFFD1D1D), // Crimson
-                                    Color(0xFFFCB045)  // Warm Amber
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Shield,
-                            contentDescription = "Connect with Instagram",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Connect with Instagram",
-                            fontFamily = DmSansFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // SECONDARY: Open Installed Instagram App
-            OutlinedButton(
-                onClick = {
-                    launchOfficialInstagramApk(context, instagramInput)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, AuraTheme.colors.border),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = AuraTheme.colors.inkSecondary
-                )
-            ) {
+            // Clipboard Quick-Fill Chip (if detected)
+            AnimatedVisibility(visible = detectedClipboardHandle != null && instagramInput.isEmpty()) {
                 Row(
+                    modifier = Modifier
+                        .padding(bottom = 14.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AuraTheme.colors.surface)
+                        .border(1.dp, AuraTheme.colors.accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                        .clickable {
+                            instagramInput = detectedClipboardHandle ?: ""
+                            detectedClipboardHandle = null
+                            errorMessage = null
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentPaste,
+                        contentDescription = "Paste",
+                        tint = AuraTheme.colors.accent,
+                        modifier = Modifier.size(14.dp)
+                    )
                     Text(
-                        text = "Open Installed Instagram App ↗",
+                        text = "Paste @ from clipboard",
                         fontFamily = DmSansFontFamily,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp,
-                        color = AuraTheme.colors.inkSecondary
+                        color = AuraTheme.colors.accent
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // Divider: OR ENTER MANUALLY
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(AuraTheme.colors.border)
-                )
-                Text(
-                    text = "OR ENTER MANUALLY",
-                    fontFamily = DmMonoFontFamily,
-                    fontSize = 10.sp,
-                    color = AuraTheme.colors.inkMuted,
-                    modifier = Modifier.padding(horizontal = 10.dp)
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(AuraTheme.colors.border)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // CENTERED INPUT BOX
+            // USERNAME INPUT FIELD
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp)
+                    .height(60.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(AuraTheme.colors.surface)
                     .border(
@@ -457,14 +342,14 @@ fun InstagramInputScreen(
                         text = "@",
                         fontFamily = DmMonoFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         color = if (instagramInput.isNotEmpty()) AuraTheme.colors.accent else AuraTheme.colors.inkSecondary
                     )
 
                     Box(modifier = Modifier.weight(1f)) {
                         if (instagramInput.isEmpty()) {
                             Text(
-                                text = "your_instagram_handle",
+                                text = "username",
                                 fontFamily = DmSansFontFamily,
                                 fontSize = 16.sp,
                                 color = AuraTheme.colors.inkMuted
@@ -474,37 +359,39 @@ fun InstagramInputScreen(
                         BasicTextField(
                             value = instagramInput,
                             onValueChange = {
-                                instagramInput = it.trim().removePrefix("@").lowercase()
+                                val sanitized = it.trim().removePrefix("@").lowercase()
+                                    .filter { c -> c.isLetterOrDigit() || c == '.' || c == '_' }
+                                instagramInput = sanitized
                                 errorMessage = null
                             },
                             textStyle = TextStyle(
                                 fontFamily = DmSansFontFamily,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
+                                fontSize = 16.5.sp,
                                 color = AuraTheme.colors.ink
                             ),
                             cursorBrush = SolidColor(AuraTheme.colors.accent),
                             singleLine = true,
-                            enabled = !isAnalyzing,
+                            enabled = !isSubmitting,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.None,
                                 autoCorrectEnabled = false,
                                 imeAction = ImeAction.Done
                             ),
                             keyboardActions = KeyboardActions(
-                                onDone = { performAnalysis() }
+                                onDone = { submitUsername() }
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    if (instagramInput.isNotEmpty() && !isAnalyzing) {
+                    if (instagramInput.isNotEmpty() && !isSubmitting) {
                         Icon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "Clear",
                             tint = AuraTheme.colors.inkMuted,
                             modifier = Modifier
-                                .size(18.dp)
+                                .size(20.dp)
                                 .clip(CircleShape)
                                 .clickable {
                                     instagramInput = ""
@@ -515,126 +402,52 @@ fun InstagramInputScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Privacy guarantee pill
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Lock,
-                    contentDescription = null,
-                    tint = AuraTheme.colors.inkMuted,
-                    modifier = Modifier.size(13.dp)
-                )
-                Text(
-                    text = "Pure offline BLE. 1-tap open directly to Instagram.",
-                    fontFamily = DmMonoFontFamily,
-                    fontSize = 10.5.sp,
-                    color = AuraTheme.colors.inkMuted,
-                    textAlign = TextAlign.Center
-                )
-            }
-
             // Error Message Box
             AnimatedVisibility(visible = errorMessage != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF7F1D1D).copy(alpha = 0.2f))
-                        .border(1.dp, Color(0xFFDC2626).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = errorMessage ?: "",
-                        fontFamily = DmSansFontFamily,
-                        fontSize = 12.5.sp,
-                        color = Color(0xFFFCA5A5),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Continue manually anyway →",
-                        fontFamily = DmSansFontFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        color = AuraTheme.colors.accent,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable {
-                                val clean = instagramInput.trim().removePrefix("@").lowercase()
-                                onContinue(clean, null, null, null)
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                Text(
+                    text = errorMessage ?: "",
+                    fontFamily = DmSansFontFamily,
+                    fontSize = 12.5.sp,
+                    color = Color(0xFFEF4444),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ACTION BUTTON: Analyze & Continue
+            // PRIMARY ACTION: CONTINUE BUTTON
             Button(
-                onClick = { if (!isAnalyzing) performAnalysis() },
-                enabled = instagramInput.isNotBlank(),
+                onClick = { submitUsername() },
+                enabled = !isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp),
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(16.dp)),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AuraTheme.colors.accent,
-                    contentColor = Color.White,
-                    disabledContainerColor = AuraTheme.colors.surfaceSubtle,
-                    disabledContentColor = AuraTheme.colors.inkMuted
-                )
+                    disabledContainerColor = AuraTheme.colors.accent.copy(alpha = 0.5f)
+                ),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues()
             ) {
-                if (isAnalyzing) {
+                if (isSubmitting) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator(
-                            color = Color.White,
-                            strokeWidth = 2.5.dp,
+                            color = Color.Black,
+                            strokeWidth = 2.dp,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = analysisStatusText,
+                            text = "Loading profile...",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.5.sp,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                } else if (isSuccess) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Profile Extracted!",
-                            fontFamily = DmSansFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.5.sp,
-                            color = Color.White
+                            fontSize = 15.sp,
+                            color = Color.Black
                         )
                     }
                 } else {
@@ -644,27 +457,70 @@ fun InstagramInputScreen(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "Analyze & Continue",
+                            text = "Continue",
                             fontFamily = DmSansFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = Color.White
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.5.sp,
+                            color = Color.Black
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = Color.Black,
                             modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Quick Jump to Instagram app (if user wants to check handle)
+            OutlinedButton(
+                onClick = {
+                    val clean = instagramInput.trim().removePrefix("@")
+                    val uri = if (clean.isNotEmpty()) {
+                        Uri.parse("instagram://user?username=")
+                    } else {
+                        Uri.parse("instagram://app")
+                    }
+                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        setPackage("com.instagram.android")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/")))
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Could not open Instagram", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, AuraTheme.colors.border),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AuraTheme.colors.inkSecondary
+                )
+            ) {
+                Text(
+                    text = "Open Instagram App ↗",
+                    fontFamily = DmSansFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = AuraTheme.colors.inkSecondary
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // FOOTER: Trust & privacy tagline
+        // FOOTER: Privacy & No Auth Guarantee
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -677,120 +533,11 @@ fun InstagramInputScreen(
                 modifier = Modifier.size(14.dp)
             )
             Text(
-                text = "Zero tracking · Offline BLE Proximity · Ephemeral IDs",
+                text = "Zero passwords · Offline BLE proximity · Direct profile link",
                 fontFamily = DmMonoFontFamily,
                 fontSize = 10.sp,
                 color = AuraTheme.colors.inkMuted
             )
         }
-    }
-
-    if (showMetaDialog) {
-        MetaAuthDialog(
-            clientId = "1908405646991633",
-            onTokenReceived = { token ->
-                showMetaDialog = false
-                isAnalyzing = true
-                analysisStatusText = "Verifying Meta credentials..."
-                coroutineScope.launch(Dispatchers.IO) {
-                    try {
-                        val url = URL("https://graph.facebook.com/v19.0/me?fields=id,name,picture.width(400)&access_token=" + token)
-                        val conn = (url.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "GET"
-                            connectTimeout = 8000
-                            readTimeout = 8000
-                        }
-                        if (conn.responseCode == 200) {
-                            val text = conn.inputStream.bufferedReader().use { it.readText() }
-                            val json = JSONObject(text)
-                            val verifiedName = json.optString("name", "User")
-                            val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
-                            val cleanHandle = verifiedName.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
-
-                            withContext(Dispatchers.Main) {
-                                isAnalyzing = false
-                                isSuccess = true
-                                UserSession.setVerifiedMeta(context, true)
-                                Toast.makeText(context, "Verified with Meta: @" + cleanHandle, Toast.LENGTH_SHORT).show()
-                                onContinue(cleanHandle, verifiedName, picUrl, "Verified via official Meta identity")
-                            }
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                isAnalyzing = false
-                                errorMessage = "Could not verify profile with Meta (HTTP " + conn.responseCode + ")"
-                            }
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            isAnalyzing = false
-                            errorMessage = "Meta verification error: " + (e.localizedMessage ?: "Unknown error")
-                        }
-                    }
-                }
-            },
-            onDismiss = {
-                showMetaDialog = false
-            }
-        )
-    }
-}
-
-
-/**
- * Direct launch into official Instagram Android APK (com.instagram.android)
- * Opens user's profile if username entered, or opens Instagram app directly.
- */
-private fun launchOfficialInstagramApk(context: Context, handle: String) {
-    val clean = handle.trim().removePrefix("@")
-    val igPackage = "com.instagram.android"
-
-    // 1. Direct deep link into Instagram user profile if handle is present, or main app
-    val deepLinkUri = if (clean.isNotBlank()) {
-        Uri.parse("instagram://user?username=" + clean)
-    } else {
-        Uri.parse("instagram://app")
-    }
-
-    val intent = Intent(Intent.ACTION_VIEW, deepLinkUri).apply {
-        setPackage(igPackage)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-
-    try {
-        context.startActivity(intent)
-        Toast.makeText(context, "Opening official Instagram app...", Toast.LENGTH_SHORT).show()
-        return
-    } catch (_: Exception) {}
-
-    // 2. Fallback to package launcher intent
-    try {
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(igPackage)
-        if (launchIntent != null) {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(launchIntent)
-            Toast.makeText(context, "Opening official Instagram app...", Toast.LENGTH_SHORT).show()
-            return
-        }
-    } catch (_: Exception) {}
-
-    // 3. Fallback to Google Play Store to install official Instagram APK
-    try {
-        val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + igPackage)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(marketIntent)
-        Toast.makeText(context, "Instagram app not installed. Opening Play Store...", Toast.LENGTH_SHORT).show()
-        return
-    } catch (_: Exception) {}
-
-    // 4. Web browser fallback
-    try {
-        val webUri = if (clean.isNotBlank()) "https://instagram.com/" + clean else "https://instagram.com"
-        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUri)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(webIntent)
-    } catch (_: Exception) {
-        Toast.makeText(context, "Could not open Instagram", Toast.LENGTH_SHORT).show()
     }
 }

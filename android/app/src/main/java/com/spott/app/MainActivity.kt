@@ -83,13 +83,11 @@ class MainActivity : ComponentActivity() {
 
 
     private var onPermissionsUpdated: (() -> Unit)? = null
-    private var onOAuthCallback: ((Uri) -> Unit)? = null
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.data?.let { uri ->
-            onOAuthCallback?.invoke(uri)
         }
     }
 
@@ -255,54 +253,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // OAuth Deep Link Handler for Instagram Login
-            DisposableEffect(Unit) {
-                onOAuthCallback = { uri ->
-                    val code = uri.getQueryParameter("code")
-                    val usernameParam = uri.getQueryParameter("username")
-                    val avatarParam = uri.getQueryParameter("avatar")
-
-                    if (!usernameParam.isNullOrBlank()) {
-                        val clean = usernameParam.removePrefix("@")
-                        currentInstagramHandle = clean
-                        currentSyncUsername = clean
-                        currentDisplayName = clean
-                        if (!avatarParam.isNullOrBlank()) currentAvatarAsset = avatarParam
-                        UserSession.setVerifiedMeta(this@MainActivity, true)
-                        android.widget.Toast.makeText(this@MainActivity, "Connected: @" + clean, android.widget.Toast.LENGTH_SHORT).show()
-                        navState = AppNavState.SETUP
-                    } else if (!code.isNullOrBlank()) {
-                        coroutineScope.launch {
-                            try {
-                                val syncApi = SyncApiClient()
-                                val handleToUse = if (currentInstagramHandle.isNotBlank()) currentInstagramHandle else "jish_nu_p.g"
-                                val res = syncApi.verifyInstagram(handleToUse)
-                                val profile = res.getOrNull()
-                                withContext(Dispatchers.Main) {
-                                    currentInstagramHandle = handleToUse
-                                    currentSyncUsername = handleToUse
-                                    currentDisplayName = profile?.fullName ?: handleToUse
-                                    currentAvatarAsset = profile?.avatarUrl
-                                    currentIntro = profile?.bio?.take(60) ?: ""
-                                    UserSession.setVerifiedMeta(this@MainActivity, true)
-                                    android.widget.Toast.makeText(this@MainActivity, "Instagram Authorized: @" + handleToUse, android.widget.Toast.LENGTH_SHORT).show()
-                                    navState = AppNavState.SETUP
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    navState = AppNavState.SETUP
-                                }
-                            }
-                        }
-                    }
-                }
-
-                intent?.data?.let { onOAuthCallback?.invoke(it) }
-
-                onDispose {
-                    onOAuthCallback = null
-                }
-            }
 
             // Silently check for GitHub updates 2 seconds after app launch
             LaunchedEffect(Unit) {

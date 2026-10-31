@@ -48,29 +48,6 @@
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
-                <meta-data
-            android:name="com.facebook.sdk.ApplicationId"
-            android:value="@string/facebook_app_id" />
-        <meta-data
-            android:name="com.facebook.sdk.ClientToken"
-            android:value="@string/facebook_client_token" />
-
-        <activity
-            android:name="com.facebook.FacebookActivity"
-            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation"
-            android:label="@string/app_name" />
-        <activity
-            android:name="com.facebook.CustomTabActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="@string/fb_login_protocol_scheme" />
-            </intent-filter>
-        </activity>
-
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -79,15 +56,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- Spott & Instagram OAuth Deep Links -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="spott" android:host="auth" />
-                <data android:scheme="fb1908405646991633" />
-                <data android:scheme="syncapp" android:host="auth" />
             </intent-filter>
         </activity>
 
@@ -110,7 +78,7 @@
         <!-- In-App Auto-Updater FileProvider -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.provider"
+            android:authorities=".provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
