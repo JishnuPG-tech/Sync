@@ -9,6 +9,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 import android.widget.Toast
 
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.PaddingValues
@@ -117,6 +123,48 @@ fun InstagramInputScreen(
     val apiClient = remember { SyncApiClient() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
+
+    // Clipboard auto-detection: when returning from Instagram app, auto-fill copied username
+    val lifecycleOwner = context as? LifecycleOwner
+    if (lifecycleOwner != null) {
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    try {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        if (clipboard != null && clipboard.hasPrimaryClip()) {
+                            val clip = clipboard.primaryClip
+                            if (clip != null && clip.itemCount > 0) {
+                                val text = clip.getItemAt(0)?.text?.toString()?.trim() ?: ""
+                                if (text.isNotEmpty()) {
+                                    val extracted = when {
+                                        text.contains("instagram.com/") -> {
+                                            text.substringAfter("instagram.com/")
+                                                .substringBefore("?")
+                                                .substringBefore("/")
+                                                .removePrefix("@")
+                                                .trim()
+                                        }
+                                        text.startsWith("@") -> text.removePrefix("@").trim()
+                                        else -> ""
+                                    }
+                                    if (extracted.matches(Regex("^[a-zA-Z0-9._]{1,30}$")) && instagramInput.isEmpty()) {
+                                        instagramInput = extracted
+                                        Toast.makeText(context, "Detected @" + extracted + " from clipboard!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
+    }
+
 
     fun performAnalysis() {
         val clean = instagramInput.trim().removePrefix("@").lowercase()
@@ -246,7 +294,7 @@ fun InstagramInputScreen(
 
             // Subtitle explanation
             Text(
-                text = "Verify your real-world identity with 1-tap Meta authentication, or enter your Instagram handle manually.",
+                text = "Connect via the official Instagram Android app, or enter your Instagram handle manually below.",
                 fontFamily = DmSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.5.sp,
@@ -258,15 +306,15 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1-TAP SECURE META / INSTAGRAM LOGIN BUTTON
+            // 1-TAP DIRECT REDIRECT TO OFFICIAL INSTAGRAM APP
             Button(
                 onClick = {
                     errorMessage = null
-                    showMetaDialog = true
+                    launchOfficialInstagramApk(context, instagramInput)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(56.dp)
                     .clip(RoundedCornerShape(16.dp)),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.Transparent
@@ -293,13 +341,13 @@ fun InstagramInputScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Shield,
-                            contentDescription = "Verified by Meta",
+                            contentDescription = "Official Instagram App",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Continue with Meta / Instagram",
+                            text = "Open in Official Instagram App",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -638,5 +686,65 @@ fun InstagramInputScreen(
                 showMetaDialog = false
             }
         )
+    }
+}
+
+
+/**
+ * Direct launch into official Instagram Android APK (com.instagram.android)
+ * Opens user's profile if username entered, or opens Instagram app directly.
+ */
+private fun launchOfficialInstagramApk(context: Context, handle: String) {
+    val clean = handle.trim().removePrefix("@")
+    val igPackage = "com.instagram.android"
+
+    // 1. Direct deep link into Instagram user profile if handle is present, or main app
+    val deepLinkUri = if (clean.isNotBlank()) {
+        Uri.parse("instagram://user?username=" + clean)
+    } else {
+        Uri.parse("instagram://app")
+    }
+
+    val intent = Intent(Intent.ACTION_VIEW, deepLinkUri).apply {
+        setPackage(igPackage)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    try {
+        context.startActivity(intent)
+        Toast.makeText(context, "Opening official Instagram app...", Toast.LENGTH_SHORT).show()
+        return
+    } catch (_: Exception) {}
+
+    // 2. Fallback to package launcher intent
+    try {
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(igPackage)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launchIntent)
+            Toast.makeText(context, "Opening official Instagram app...", Toast.LENGTH_SHORT).show()
+            return
+        }
+    } catch (_: Exception) {}
+
+    // 3. Fallback to Google Play Store to install official Instagram APK
+    try {
+        val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + igPackage)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(marketIntent)
+        Toast.makeText(context, "Instagram app not installed. Opening Play Store...", Toast.LENGTH_SHORT).show()
+        return
+    } catch (_: Exception) {}
+
+    // 4. Web browser fallback
+    try {
+        val webUri = if (clean.isNotBlank()) "https://instagram.com/" + clean else "https://instagram.com"
+        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUri)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(webIntent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "Could not open Instagram", Toast.LENGTH_SHORT).show()
     }
 }
