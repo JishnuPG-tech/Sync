@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ghostmesh.app"
+    namespace = "com.spott.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ghostmesh.app"
+        applicationId = "com.spott.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 2
