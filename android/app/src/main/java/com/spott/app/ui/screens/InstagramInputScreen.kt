@@ -369,7 +369,7 @@ fun InstagramInputScreen(
             // Web OAuth to Instagram (instagram.com only - NEVER facebook.com)
             OutlinedButton(
                 onClick = {
-                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?client_id=1908405646991633&redirect_uri=spott://auth/instagram&response_type=code&scope=user_profile"
+                    val igOAuthUrl = "https://www.instagram.com/oauth/authorize?client_id=1093422740163798&redirect_uri=https://jishnupg-hermes.hf.space/auth/instagram&response_type=code&scope=instagram_business_basic"
                     try {
                         val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(igOAuthUrl)).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
