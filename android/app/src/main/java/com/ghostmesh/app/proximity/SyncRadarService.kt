@@ -21,6 +21,8 @@ class SyncRadarService : Service() {
         const val ACTION_STOP_RADAR = "com.ghostmesh.app.action.STOP_RADAR"
         const val ACTION_SET_FOREGROUND_STATE = "com.ghostmesh.app.action.SET_FOREGROUND_STATE"
         const val EXTRA_IS_APP_FOREGROUND = "extra_is_app_foreground"
+        const val ACTION_SET_GHOST_MODE = "com.ghostmesh.app.action.SET_GHOST_MODE"
+        const val EXTRA_IS_GHOST_MODE = "extra_is_ghost_mode" 
 
         // Global callback for real-time in-app UI delivery when MainActivity is active
         var onPeerDiscoveredListener: ((FilteredBleObservation) -> Unit)? = null
@@ -72,6 +74,19 @@ class SyncRadarService : Service() {
                 context.startService(intent)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not notify foreground state: " + e.message)
+            }
+        }
+
+        fun notifyGhostMode(context: Context, isGhost: Boolean) {
+            if (!isServiceRunning) return
+            try {
+                val intent = Intent(context, SyncRadarService::class.java).apply {
+                    action = ACTION_SET_GHOST_MODE
+                    putExtra(EXTRA_IS_GHOST_MODE, isGhost)
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not notify ghost mode: " + e.message)
             }
         }
     }
@@ -204,6 +219,10 @@ class SyncRadarService : Service() {
                 isAppInForeground = intent?.getBooleanExtra(EXTRA_IS_APP_FOREGROUND, true) ?: true
                 updateRadarPowerMode()
             }
+            ACTION_SET_GHOST_MODE -> {
+                val ghost = intent?.getBooleanExtra(EXTRA_IS_GHOST_MODE, false) ?: false
+                bleManager?.setGhostMode(ghost)
+            }
         }
         return START_STICKY
     }
@@ -230,6 +249,8 @@ class SyncRadarService : Service() {
 
         Log.i(TAG, "Starting BLE Radar in mode: $targetMode with broadcast name: $broadcastName")
         bleManager?.setPowerMode(targetMode, token, broadcastName)
+        val isGhost = com.ghostmesh.app.data.UserSession.isGhostMode(this) && com.ghostmesh.app.data.UserSession.isAdmin(this)
+        bleManager?.setGhostMode(isGhost)
     }
 
     private fun updateRadarPowerMode() {

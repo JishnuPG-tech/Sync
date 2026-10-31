@@ -77,6 +77,26 @@ class BleDiscoveryManager(
     private var isAdvertising: Boolean = false
     private var isScanning: Boolean = false
     private var isExtendedActive: Boolean = false
+    private var isGhostMode: Boolean = false
+
+    fun setGhostMode(enabled: Boolean) {
+        if (isGhostMode == enabled) return
+        isGhostMode = enabled
+        android.util.Log.i(TAG, "Ghost Mode updated -> " + isGhostMode)
+        if (isGhostMode) {
+            stopAdvertisingOnly()
+        } else if (targetPowerMode != RadarPowerMode.OFF && !isAdvertising) {
+            val adapter = bluetoothAdapter
+            val hasBt5Hardware = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                    adapter?.isLeExtendedAdvertisingSupported == true &&
+                    adapter?.isLeCodedPhySupported == true
+            if (targetPowerMode == RadarPowerMode.EXTENDED_RANGE && hasBt5Hardware) {
+                startExtendedCodedAdvertising()
+            } else {
+                startStandardAdvertising()
+            }
+        }
+    }
 
     private val _discoveryState = MutableStateFlow<DiscoveryState>(DiscoveryState.Idle)
     val discoveryState: StateFlow<DiscoveryState> = _discoveryState.asStateFlow()
@@ -282,13 +302,15 @@ class BleDiscoveryManager(
                 adapter.isLeExtendedAdvertisingSupported &&
                 adapter.isLeCodedPhySupported
 
-        // 1. Start Advertising Path
-        if (!isAdvertising) {
+        // 1. Start Advertising Path (ONLY if Ghost Mode is disabled!)
+        if (!isAdvertising && !isGhostMode) {
             if (targetPowerMode == RadarPowerMode.EXTENDED_RANGE && hasBt5Hardware) {
                 startExtendedCodedAdvertising()
             } else {
                 startStandardAdvertising()
             }
+        } else if (isGhostMode && isAdvertising) {
+            stopAdvertisingOnly()
         }
 
         // 2. Start Scanning Path
@@ -434,6 +456,18 @@ class BleDiscoveryManager(
     }
 
     @SuppressLint("MissingPermission")
+    fun stopAdvertisingOnly() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                advertiser?.stopAdvertisingSet(extendedAdvertiseCallback)
+            }
+        } catch (_: Exception) {}
+        try {
+            advertiser?.stopAdvertising(legacyAdvertiseCallback)
+        } catch (_: Exception) {}
+        isAdvertising = false
+    }
+
     fun stopRadar() {
         targetPowerMode = RadarPowerMode.OFF
 

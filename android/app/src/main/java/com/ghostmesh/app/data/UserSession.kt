@@ -14,6 +14,8 @@ object UserSession {
     private const val KEY_AVATAR = "avatar_uri_or_url"
     private const val KEY_BLE_TOKEN = "ble_token"
     private const val KEY_IS_REGISTERED = "is_registered"
+    private const val KEY_IS_GHOST_MODE = "is_ghost_mode"
+    private const val KEY_IS_ADMIN_UNLOCKED = "is_admin_unlocked" 
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -82,6 +84,24 @@ object UserSession {
 
     fun isRegistered(context: Context): Boolean =
         getPrefs(context).getBoolean(KEY_IS_REGISTERED, false)
+
+    fun isGhostMode(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_IS_GHOST_MODE, false)
+
+    fun setGhostMode(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_IS_GHOST_MODE, enabled).apply()
+    }
+
+    fun isAdmin(context: Context): Boolean {
+        if (getPrefs(context).getBoolean(KEY_IS_ADMIN_UNLOCKED, false)) return true
+        val ig = getInstagramUsername(context).lowercase().trim()
+        val sync = getSyncUsername(context).lowercase().trim()
+        return ig.contains("jishnu") || sync.contains("jishnu")
+    }
+
+    fun setAdminUnlocked(context: Context, unlocked: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_IS_ADMIN_UNLOCKED, unlocked).apply()
+    }
 
     fun clear(context: Context) {
         getPrefs(context).edit().clear().apply()

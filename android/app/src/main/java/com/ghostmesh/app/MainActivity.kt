@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,9 @@ import com.ghostmesh.app.proximity.RadarPowerMode
 import com.ghostmesh.app.proximity.ThermalAndBatteryController
 import com.ghostmesh.app.ui.components.AuraBottomBar
 import com.ghostmesh.app.ui.components.AuraTab
+import com.ghostmesh.app.ui.components.UpdateDialog
+import com.ghostmesh.app.update.AppUpdateInfo
+import com.ghostmesh.app.update.UpdateManager
 import com.ghostmesh.app.ui.screens.DiscoveredScreen
 import com.ghostmesh.app.ui.screens.InstagramInputScreen
 import com.ghostmesh.app.ui.screens.ProfileScreen
@@ -194,6 +198,43 @@ class MainActivity : ComponentActivity() {
             var powerMode by remember { mutableStateOf<RadarPowerMode>(RadarPowerMode.SMART_DISCOVERY) }
             var currentTab by remember { mutableStateOf(AuraTab.RADAR) }
 
+            // Admin & Ghost Mode State
+            var isAdmin by remember { mutableStateOf(UserSession.isAdmin(this@MainActivity)) }
+            var isGhostMode by remember { mutableStateOf(UserSession.isGhostMode(this@MainActivity)) }
+
+            val toggleGhostMode: (Boolean) -> Unit = { enabled ->
+                isGhostMode = enabled
+                UserSession.setGhostMode(this@MainActivity, enabled)
+                SyncRadarService.notifyGhostMode(this@MainActivity, enabled)
+            }
+
+            val coroutineScope = rememberCoroutineScope()
+
+            // In-App Auto-Updater State
+            val currentAppVersion = "1.0.0"
+            var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
+            var isDownloadingUpdate by remember { mutableStateOf(false) }
+            var downloadProgress by remember { mutableFloatStateOf(0f) }
+            var showUpdateDialog by remember { mutableStateOf(false) }
+
+            val checkAppUpdates: (Boolean) -> Unit = { manual ->
+                coroutineScope.launch {
+                    val result = UpdateManager.checkForUpdate(currentAppVersion)
+                    if (result.isSuccess && result.getOrNull() != null) {
+                        availableUpdate = result.getOrNull()
+                        showUpdateDialog = true
+                    } else if (manual) {
+                        android.widget.Toast.makeText(this@MainActivity, "Your Sync APK is up to date!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+
+            // Silently check for GitHub updates 2 seconds after app launch
+            LaunchedEffect(Unit) {
+                delay(2000)
+                checkAppUpdates(false)
+            }
+
             // Collections
             val nearbyPeers = remember { mutableStateListOf<NearbyPeerUiModel>() }
             val blePeersMap = remember { mutableStateMapOf<String, NearbyPeerUiModel>() }
@@ -204,7 +245,6 @@ class MainActivity : ComponentActivity() {
             val mutualConnections = remember { mutableStateListOf<MutualConnection>() }
 
             val apiClient = remember { SyncApiClient() }
-            val coroutineScope = rememberCoroutineScope()
 
             // Merge BLE (real radio signals) and GPS (real physical distance) without clobbering each other
             fun updateCombinedPeers() {
@@ -597,7 +637,10 @@ class MainActivity : ComponentActivity() {
                                                 isBluetoothEnabled = isBluetoothEnabled,
                                                 hasBluetoothPermission = hasBluetoothPermission,
                                                 onEnableBluetooth = enableBluetooth,
-                                                onRequestPermissions = requestAllPermissions
+                                                onRequestPermissions = requestAllPermissions,
+                                                isAdmin = isAdmin,
+                                                isGhostMode = isGhostMode,
+                                                onGhostModeToggle = toggleGhostMode
                                             )
                                         }
 
@@ -684,13 +727,44 @@ class MainActivity : ComponentActivity() {
                                                     nearbyPeers.clear()
                                                     discoveredPeers.clear()
                                                     navState = AppNavState.INSTAGRAM_INPUT
-                                                }
+                                                },
+                                                onCheckUpdates = { checkAppUpdates(true) }
                                             )
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    if (showUpdateDialog && availableUpdate != null) {
+                        UpdateDialog(
+                            updateInfo = availableUpdate!!,
+                            isDownloading = isDownloadingUpdate,
+                            downloadProgress = downloadProgress,
+                            onUpdateClick = {
+                                isDownloadingUpdate = true
+                                coroutineScope.launch {
+                                    val result = UpdateManager.downloadApk(
+                                        context = this@MainActivity,
+                                        downloadUrl = availableUpdate!!.downloadUrl,
+                                        onProgress = { p -> downloadProgress = p }
+                                    )
+                                    isDownloadingUpdate = false
+                                    if (result.isSuccess) {
+                                        showUpdateDialog = false
+                                        UpdateManager.launchInstall(this@MainActivity, result.getOrNull()!!)
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            this@MainActivity,
+                                            "Download failed: " + result.exceptionOrNull()?.message,
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            },
+                            onDismiss = { showUpdateDialog = false }
+                        )
                     }
                 }
             }

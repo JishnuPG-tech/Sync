@@ -1,5 +1,9 @@
 package com.ghostmesh.app.ui.screens
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.ghostmesh.app.data.UserSession
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,8 +79,10 @@ fun ProfileScreen(
     onAppearanceChanged: (AppearanceMode) -> Unit,
     onEditProfileClick: () -> Unit,
     onRerunOnboarding: () -> Unit,
+    onCheckUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var smartScanning by remember { mutableStateOf(true) }
     var ghostMode by remember { mutableStateOf(false) }
 
@@ -235,12 +241,38 @@ fun ProfileScreen(
                                 .height(1.dp)
                         )
 
-                        SettingsToggleRow(
-                            title = "Ghost Mode (Incognito)",
-                            subtitle = "Scan for others without broadcasting yourself",
-                            checked = ghostMode,
-                            onCheckedChange = { ghostMode = it }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onCheckUpdates() }
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Check for Updates",
+                                    fontFamily = DmSansFontFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = AuraTheme.colors.ink
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Auto-update to latest GitHub release",
+                                    fontFamily = DmSansFontFamily,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp,
+                                    color = AuraTheme.colors.inkSecondary
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Check for updates",
+                                tint = AuraTheme.colors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -317,8 +349,9 @@ fun ProfileScreen(
 
             // 5. FOOTER
             item {
+                var tapCount by remember { mutableStateOf(0) }
                 Text(
-                    text = "Sync APK v1.0.0 • Universal Android & iOS",
+                    text = "Sync APK v1.1.0 • Pure BLE Mesh",
                     fontFamily = DmMonoFontFamily,
                     fontSize = 10.5.sp,
                     color = AuraTheme.colors.inkMuted,
@@ -326,6 +359,16 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
+                        .clickable {
+                            tapCount++
+                            if (tapCount >= 5) {
+                                UserSession.setAdminUnlocked(context, true)
+                                Toast.makeText(context, "Admin Mode Unlocked: Ghost Mode Enabled!", Toast.LENGTH_SHORT).show()
+                                tapCount = 0
+                            } else if (tapCount >= 2) {
+                                Toast.makeText(context, "${5 - tapCount} taps away from Admin unlock", Toast.LENGTH_SHORT).show()
+                            }
+                        }
                 )
             }
         }
