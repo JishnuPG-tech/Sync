@@ -424,7 +424,7 @@ fun ProfileScreen(
             item {
                 var tapCount by remember { mutableStateOf(0) }
                 Text(
-                    text = "Spott APK v1.2.0 • Pure BLE Mesh",
+                    text = "Spott APK v" + com.spott.app.BuildConfig.VERSION_NAME + " • Pure BLE Mesh",
                     fontFamily = DmMonoFontFamily,
                     fontSize = 10.5.sp,
                     color = AuraTheme.colors.inkMuted,

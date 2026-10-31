@@ -227,7 +227,7 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             // In-App Auto-Updater State
-            val currentAppVersion = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
+            val currentAppVersion = com.spott.app.BuildConfig.VERSION_NAME
             var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
             var isDownloadingUpdate by remember { mutableStateOf(false) }
             var downloadProgress by remember { mutableFloatStateOf(0f) }
