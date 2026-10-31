@@ -78,7 +78,7 @@
         <!-- In-App Auto-Updater FileProvider -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities=".provider"
+            android:authorities="com.spott.app.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
