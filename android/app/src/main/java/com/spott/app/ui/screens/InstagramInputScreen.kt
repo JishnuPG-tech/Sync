@@ -1,4 +1,14 @@
 package com.spott.app.ui.screens
+import android.app.Activity
+import android.os.Bundle
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.OutlinedButton
+import com.facebook.CallbackManager
+import com.facebook.FacebookCallback
+import com.facebook.FacebookException
+import com.facebook.GraphRequest
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
 
 import com.spott.app.ui.components.MetaAuthDialog
 import com.spott.app.data.UserSession
@@ -102,6 +112,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun InstagramInputScreen(
     initialHandle: String = "",
+    callbackManager: CallbackManager? = null,
     onContinue: (
         instagramHandle: String,
         extractedFullName: String?,
@@ -165,6 +176,63 @@ fun InstagramInputScreen(
         }
     }
 
+
+    
+    fun startMetaLogin() {
+        val act = context as? Activity
+        val cm = callbackManager ?: (context as? com.spott.app.MainActivity)?.callbackManager
+        if (act == null || cm == null) {
+            errorMessage = "Activity context unavailable for Meta SSO"
+            return
+        }
+
+        isAnalyzing = true
+        analysisStatusText = "Connecting to Meta authorization..."
+        errorMessage = null
+
+        val loginManager = LoginManager.getInstance()
+        loginManager.registerCallback(cm, object : FacebookCallback<LoginResult> {
+            override fun onSuccess(result: LoginResult) {
+                analysisStatusText = "Extracting verified profile..."
+                val request = GraphRequest.newMeRequest(result.accessToken) { json, _ ->
+                    if (json != null) {
+                        val name = json.optString("name", "User")
+                        val picUrl = json.optJSONObject("picture")?.optJSONObject("data")?.optString("url")
+                        val cleanHandle = name.lowercase().replace(" ", "_").filter { it.isLetterOrDigit() || it == '_' }
+
+                        isAnalyzing = false
+                        isSuccess = true
+                        UserSession.setVerifiedMeta(context, true)
+                        Toast.makeText(context, "Verified with Meta: @" + cleanHandle, Toast.LENGTH_SHORT).show()
+                        onContinue(cleanHandle, name, picUrl, "Verified via official Meta identity")
+                    } else {
+                        isAnalyzing = false
+                        errorMessage = "Failed to extract profile information from Meta"
+                    }
+                }
+                val parameters = Bundle().apply {
+                    putString("fields", "id,name,picture.width(500),email")
+                }
+                request.parameters = parameters
+                request.executeAsync()
+            }
+
+            override fun onCancel() {
+                isAnalyzing = false
+                Toast.makeText(context, "Meta login cancelled", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onError(error: FacebookException) {
+                isAnalyzing = false
+                errorMessage = "Meta authorization error: " + (error.localizedMessage ?: "Unknown error")
+            }
+        })
+
+        loginManager.logInWithReadPermissions(
+            act,
+            listOf("public_profile", "email")
+        )
+    }
 
     fun performAnalysis() {
         val clean = instagramInput.trim().removePrefix("@").lowercase()
@@ -294,7 +362,7 @@ fun InstagramInputScreen(
 
             // Subtitle explanation
             Text(
-                text = "Connect via the official Instagram Android app, or enter your Instagram handle manually below.",
+                text = "Authorize with 1-tap Meta / Instagram to import your real profile, or enter your handle manually below.",
                 fontFamily = DmSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.5.sp,
@@ -306,11 +374,11 @@ fun InstagramInputScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // 1-TAP DIRECT REDIRECT TO OFFICIAL INSTAGRAM APP
+            // 1-TAP SECURE META / INSTAGRAM LOGIN WITH REAL PROFILE PERMISSIONS
             Button(
                 onClick = {
                     errorMessage = null
-                    launchOfficialInstagramApk(context, instagramInput)
+                    startMetaLogin()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -341,19 +409,49 @@ fun InstagramInputScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Shield,
-                            contentDescription = "Official Instagram App",
+                            contentDescription = "Verified Meta Login",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Open in Official Instagram App",
+                            text = "Continue with Meta / Instagram",
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = Color.White
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Secondary option: Launch installed Instagram App
+            OutlinedButton(
+                onClick = {
+                    launchOfficialInstagramApk(context, instagramInput)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, AuraTheme.colors.border),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AuraTheme.colors.inkSecondary
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Open Installed Instagram App ↗",
+                        fontFamily = DmSansFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                        color = AuraTheme.colors.inkSecondary
+                    )
                 }
             }
 

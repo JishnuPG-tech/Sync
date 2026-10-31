@@ -40,6 +40,8 @@ android {
 }
 
 dependencies {
+    implementation("com.facebook.android:facebook-login:17.0.2")
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
