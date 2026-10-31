@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
             }
 
             var currentThemePreset by remember { mutableStateOf(ThemePreset.CLAUDE_WARM) }
-            var appearanceMode by remember { mutableStateOf(AppearanceMode.LIGHT) }
+            var appearanceMode by remember { mutableStateOf(AppearanceMode.SYSTEM) }
 
             // Hardware & Permission state tracking (Pure Bluetooth)
             var isBluetoothEnabled by remember {
@@ -211,20 +211,28 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             // In-App Auto-Updater State
-            val currentAppVersion = "1.0.0"
+            val currentAppVersion = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0" } catch (_: Exception) { "1.2.0" }
             var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
             var isDownloadingUpdate by remember { mutableStateOf(false) }
             var downloadProgress by remember { mutableFloatStateOf(0f) }
             var showUpdateDialog by remember { mutableStateOf(false) }
 
             val checkAppUpdates: (Boolean) -> Unit = { manual ->
+                if (manual) {
+                    android.widget.Toast.makeText(this@MainActivity, "Checking for updates...", android.widget.Toast.LENGTH_SHORT).show()
+                }
                 coroutineScope.launch {
                     val result = UpdateManager.checkForUpdate(currentAppVersion)
-                    if (result.isSuccess && result.getOrNull() != null) {
-                        availableUpdate = result.getOrNull()
-                        showUpdateDialog = true
+                    if (result.isSuccess) {
+                        val update = result.getOrNull()
+                        if (update != null) {
+                            availableUpdate = update
+                            showUpdateDialog = true
+                        } else if (manual) {
+                            android.widget.Toast.makeText(this@MainActivity, "You're on the latest version (v)", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     } else if (manual) {
-                        android.widget.Toast.makeText(this@MainActivity, "Your Sync APK is up to date!", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this@MainActivity, "Couldn't check for updates. Check connection.", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -637,10 +645,7 @@ class MainActivity : ComponentActivity() {
                                                 isBluetoothEnabled = isBluetoothEnabled,
                                                 hasBluetoothPermission = hasBluetoothPermission,
                                                 onEnableBluetooth = enableBluetooth,
-                                                onRequestPermissions = requestAllPermissions,
-                                                isAdmin = isAdmin,
-                                                isGhostMode = isGhostMode,
-                                                onGhostModeToggle = toggleGhostMode
+                                                onRequestPermissions = requestAllPermissions
                                             )
                                         }
 
@@ -728,6 +733,10 @@ class MainActivity : ComponentActivity() {
                                                     discoveredPeers.clear()
                                                     navState = AppNavState.INSTAGRAM_INPUT
                                                 },
+                                                isAdmin = isAdmin,
+                                                isGhostMode = isGhostMode,
+                                                onGhostModeToggle = toggleGhostMode,
+                                                onAdminUnlocked = { isAdmin = true },
                                                 onCheckUpdates = { checkAppUpdates(true) }
                                             )
                                         }

@@ -82,8 +82,7 @@ object UpdateManager {
             val cleanRemoteVersion = tagName.removePrefix("v").substringBefore("-")
             val cleanLocalVersion = currentVersionName.removePrefix("v").substringBefore("-")
 
-            val isNewer = isVersionNewer(cleanRemoteVersion, cleanLocalVersion) || 
-                          (tagName.isNotBlank() && tagName != "v1.0.0" && cleanLocalVersion == "1.0.0")
+            val isNewer = isVersionNewer(cleanRemoteVersion, cleanLocalVersion)
 
             if (isNewer) {
                 val info = AppUpdateInfo(
@@ -110,6 +109,7 @@ object UpdateManager {
         try {
             val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
             val lParts = local.split(".").mapNotNull { it.toIntOrNull() }
+            if (rParts.isEmpty() || lParts.isEmpty()) return false
             val maxLen = maxOf(rParts.size, lParts.size)
             for (i in 0 until maxLen) {
                 val r = rParts.getOrElse(i) { 0 }
@@ -117,8 +117,9 @@ object UpdateManager {
                 if (r > l) return true
                 if (r < l) return false
             }
+            return false
         } catch (_: Exception) {}
-        return remote != local && remote.isNotBlank()
+        return false
     }
 
     /**

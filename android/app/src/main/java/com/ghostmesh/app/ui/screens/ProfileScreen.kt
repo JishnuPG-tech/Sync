@@ -79,13 +79,16 @@ fun ProfileScreen(
     onAppearanceChanged: (AppearanceMode) -> Unit,
     onEditProfileClick: () -> Unit,
     onRerunOnboarding: () -> Unit,
+    isAdmin: Boolean = false,
+    isGhostMode: Boolean = false,
+    onGhostModeToggle: (Boolean) -> Unit = {},
+    onAdminUnlocked: () -> Unit = {},
     onCheckUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var smartScanning by remember { mutableStateOf(true) }
-    var ghostMode by remember { mutableStateOf(false) }
-
+    
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -241,6 +244,76 @@ fun ProfileScreen(
                                 .height(1.dp)
                         )
 
+                        // Ghost Mode (Admin-Only)
+                        if (isAdmin) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp)
+                                    .background(AuraTheme.colors.border)
+                                    .height(1.dp)
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Ghost Mode",
+                                            fontFamily = DmSansFontFamily,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                            color = AuraTheme.colors.ink
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(AuraTheme.colors.accentSubtle)
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = "ADMIN",
+                                                fontFamily = DmMonoFontFamily,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AuraTheme.colors.accent
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isGhostMode) "Invisible to everyone. Scanner ON." else "Scan for others without broadcasting yourself",
+                                        fontFamily = DmSansFontFamily,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        color = if (isGhostMode) AuraTheme.colors.accent else AuraTheme.colors.inkSecondary
+                                    )
+                                }
+                                Switch(
+                                    checked = isGhostMode,
+                                    onCheckedChange = onGhostModeToggle,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = AuraTheme.colors.accent,
+                                        checkedTrackColor = AuraTheme.colors.accentSubtle
+                                    )
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .background(AuraTheme.colors.border)
+                                .height(1.dp)
+                        )
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -351,7 +424,7 @@ fun ProfileScreen(
             item {
                 var tapCount by remember { mutableStateOf(0) }
                 Text(
-                    text = "Sync APK v1.1.0 • Pure BLE Mesh",
+                    text = "Sync APK v1.2.0 • Pure BLE Mesh",
                     fontFamily = DmMonoFontFamily,
                     fontSize = 10.5.sp,
                     color = AuraTheme.colors.inkMuted,
@@ -363,6 +436,7 @@ fun ProfileScreen(
                             tapCount++
                             if (tapCount >= 5) {
                                 UserSession.setAdminUnlocked(context, true)
+                                onAdminUnlocked()
                                 Toast.makeText(context, "Admin Mode Unlocked: Ghost Mode Enabled!", Toast.LENGTH_SHORT).show()
                                 tapCount = 0
                             } else if (tapCount >= 2) {

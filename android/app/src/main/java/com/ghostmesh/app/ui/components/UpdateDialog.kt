@@ -1,15 +1,17 @@
 package com.ghostmesh.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,12 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +45,33 @@ import com.ghostmesh.app.ui.theme.DmSansFontFamily
 import com.ghostmesh.app.ui.theme.PlayfairFontFamily
 import com.ghostmesh.app.update.AppUpdateInfo
 
+fun formatReleaseNotes(raw: String): String {
+    if (raw.isBlank()) return "Bug fixes and performance improvements."
+    return raw
+        .lines()
+        .map { line ->
+            var l = line.trim()
+            while (l.startsWith("#")) {
+                l = l.removePrefix("#").trim()
+            }
+            if (l.startsWith("- ") || l.startsWith("* ")) {
+                l = "• " + l.substring(2).trim()
+            }
+            l = l.replace("**", "").replace("*", "").replace("__", "").replace("`", "")
+            l.trim()
+        }
+        .filter { it.isNotBlank() }
+        .joinToString("\n\n")
+}
+
+fun formatReleaseTitle(title: String): String {
+    var t = title.trim()
+    while (t.startsWith("#")) {
+        t = t.removePrefix("#").trim()
+    }
+    t = t.replace("**", "").replace("*", "").replace("`", "").trim()
+    return t.ifBlank { "What is new in this update" }
+}
 @Composable
 fun UpdateDialog(
     updateInfo: AppUpdateInfo,
@@ -61,12 +88,12 @@ fun UpdateDialog(
             shadowElevation = 16.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 8.dp, vertical = 16.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Top Icon Badge
@@ -74,7 +101,7 @@ fun UpdateDialog(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(AuraTheme.colors.accent.copy(alpha = 0.15f))
+                        .background(AuraTheme.colors.accentSubtle)
                         .border(1.5.dp, AuraTheme.colors.accent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -86,25 +113,25 @@ fun UpdateDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = "Update Available",
                     fontFamily = PlayfairFontFamily,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 24.sp,
+                    fontSize = 23.sp,
                     color = AuraTheme.colors.ink,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Version Badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(AuraTheme.colors.surfaceSubtle)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = updateInfo.tagName,
@@ -117,11 +144,11 @@ fun UpdateDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Release Notes Card
+                // Formatted Release Notes Card
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(110.dp)
+                        .heightIn(min = 90.dp, max = 150.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(AuraTheme.colors.surface)
                         .border(1.dp, AuraTheme.colors.border, RoundedCornerShape(12.dp))
@@ -133,15 +160,15 @@ fun UpdateDialog(
                             .verticalScroll(rememberScrollState())
                     ) {
                         Text(
-                            text = updateInfo.releaseTitle.ifBlank { "What is new:" },
+                            text = formatReleaseTitle(updateInfo.releaseTitle),
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp,
+                            fontSize = 13.sp,
                             color = AuraTheme.colors.ink
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = updateInfo.releaseNotes.ifBlank { "Bug fixes and performance improvements." },
+                            text = formatReleaseNotes(updateInfo.releaseNotes),
                             fontFamily = DmSansFontFamily,
                             fontSize = 11.5.sp,
                             lineHeight = 16.sp,
@@ -150,7 +177,7 @@ fun UpdateDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Progress Indicator if downloading
                 if (isDownloading) {
@@ -186,27 +213,30 @@ fun UpdateDialog(
                             onClick = onUpdateClick,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp),
+                                .defaultMinSize(minHeight = 48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AuraTheme.colors.accent,
                                 contentColor = Color.White
-                            )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Download,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Download & Install Now",
                                     fontFamily = DmSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
+                                    fontSize = 13.5.sp,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
