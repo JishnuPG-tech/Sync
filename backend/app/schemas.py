@@ -76,22 +76,27 @@ class NearbyUserCard(BaseModel):
     """
     CRITICAL PRIVACY SHIELD:
     Returned to nearby users on radar.
-    Instagram username is STRICTLY EXCLUDED!
     """
     user_id: str
     display_name: str
     bio: Optional[str] = ""
     location: Optional[str] = ""
+    location_name: Optional[str] = ""
     avatar_url: Optional[str] = None
-    interests: List[str]
-    approx_distance_meters: float
+    interests: List[str] = []
+    approx_distance_meters: float = 5.0
+    distance_meters: Optional[float] = None
+    confidence: Optional[str] = "HIGH"
     connection_status: str = "NONE"
+    is_connection_pending: Optional[bool] = False
     instagram_username: Optional[str] = None
 
 class LocationPing(BaseModel):
     user_id: str
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 class ConnectionRequestCreate(BaseModel):
     sender_id: str

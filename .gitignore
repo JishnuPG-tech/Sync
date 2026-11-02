@@ -39,3 +39,8 @@ backend/app/static/uploads/*.webp
 Thumbs.db
 
 *.apk
+-e 
+web/node_modules
+web/dist
+.agents
+
