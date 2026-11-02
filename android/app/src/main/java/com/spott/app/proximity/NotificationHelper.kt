@@ -97,7 +97,9 @@ object NotificationHelper {
     ) {
         initNotificationChannels(context)
 
-        val cleanHandle = instagramHandle.trim().removePrefix("@")
+        val cleanHandle = instagramHandle.trim().removePrefix("@").filter {
+            it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.'
+        }.lowercase()
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
 
@@ -134,7 +136,7 @@ object NotificationHelper {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\nInstagram Profile: @$cleanHandle"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text + "\nInstagram Profile: @" + cleanHandle))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
@@ -156,14 +158,18 @@ object NotificationHelper {
     /**
      * Creates direct deep link into Instagram app, or web fallback if app is not installed
      */
-    fun createInstagramIntent(context: Context, cleanHandle: String): Intent {
-        val appUri = Uri.parse("instagram://user?username=$cleanHandle")
-        val webUri = Uri.parse("https://instagram.com/$cleanHandle")
+    fun createInstagramIntent(context: Context, rawHandle: String): Intent {
+        val cleanHandle = rawHandle.trim().removePrefix("@").filter {
+            it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.'
+        }.lowercase()
 
-        val appIntent = Intent(Intent.ACTION_VIEW, appUri).apply {
-            setPackage("com.instagram.android")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val targetUrl = if (cleanHandle.isNotEmpty() && cleanHandle != "user" && cleanHandle != "spott.user") {
+            "https://instagram.com/_u/$cleanHandle"
+        } else {
+            "https://instagram.com/"
         }
+        val appUri = Uri.parse(targetUrl)
+        val webUri = Uri.parse(if (cleanHandle.isNotEmpty() && cleanHandle != "user") "https://instagram.com/$cleanHandle" else "https://instagram.com/")
 
         val isAppInstalled = try {
             val pm = context.packageManager
@@ -174,7 +180,10 @@ object NotificationHelper {
         }
 
         return if (isAppInstalled) {
-            appIntent
+            Intent(Intent.ACTION_VIEW, appUri).apply {
+                setPackage("com.instagram.android")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
         } else {
             Intent(Intent.ACTION_VIEW, webUri).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK

@@ -710,7 +710,19 @@ fun ProfileSetupScreen(
                     isSubmitting = true
                     submissionError = null
                     coroutineScope.launch {
-                        val avatarToSave = uploadedPhotoUrl ?: instagramAvatarUrl ?: selectedPhotoUri?.toString()
+                        var finalUploadedUrl = uploadedPhotoUrl
+                        if (finalUploadedUrl.isNullOrBlank() && selectedPhotoUri != null) {
+                            try {
+                                val pBytes = context.contentResolver.openInputStream(selectedPhotoUri!!)?.use { it.readBytes() }
+                                if (pBytes != null) {
+                                    val uRes = apiClient.uploadProfilePhoto(pBytes, "avatar_${System.currentTimeMillis()}.jpg")
+                                    if (uRes.isSuccess) {
+                                        finalUploadedUrl = uRes.getOrNull()
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        val avatarToSave = finalUploadedUrl ?: instagramAvatarUrl ?: selectedPhotoUri?.toString()
                         val result = apiClient.registerUser(
                             displayName = displayName,
                             syncUsername = syncUsername,
@@ -722,6 +734,7 @@ fun ProfileSetupScreen(
 
                         if (result.isSuccess) {
                             val user = result.getOrNull()!!
+                            val finalAvatar = user.photo_uri ?: avatarToSave
                             UserSession.saveUser(
                                 context = context,
                                 userId = user.id,
@@ -730,7 +743,7 @@ fun ProfileSetupScreen(
                                 instagramUsername = user.instagram_username,
                                 bio = bio,
                                 location = locationInput,
-                                avatar = avatarToSave,
+                                avatar = finalAvatar,
                                 bleToken = user.ble_token ?: user.id
                             )
                             onProfileCreated(
@@ -740,7 +753,7 @@ fun ProfileSetupScreen(
                                 user.instagram_username,
                                 bio,
                                 locationInput,
-                                avatarToSave
+                                finalAvatar
                             )
                         } else {
                             // Server registration failed - show visible error to user so they never enter with an unresolvable identity

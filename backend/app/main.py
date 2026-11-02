@@ -91,3 +91,13 @@ def health_check():
         "database": "sqlite_wal_fast",
         "uptime": "24/7"
     }
+
+from fastapi.responses import FileResponse
+
+@app.get("/api/v1/promo-video", tags=["Promo"])
+def get_promo_video():
+    return FileResponse("/data/antigravity/spott_promo/brag_spott.mp4", media_type="video/mp4", filename="Spott-promo.mp4")
+
+@app.get("/api/v1/promo-poster", tags=["Promo"])
+def get_promo_poster():
+    return FileResponse("/data/antigravity/spott_promo/brag.jpg", media_type="image/jpeg")

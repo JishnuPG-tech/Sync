@@ -295,7 +295,9 @@ fun RadarScreen(
                                     val offsetX = (radius.value * cos(rad)).dp
                                     val offsetY = (radius.value * sin(rad)).dp
 
-                                    val pinHandle = peer.instagramUsername ?: peer.displayName.filter { it.isLetterOrDigit() || it == '_' || it == '.' }.lowercase()
+                                    val pinHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
+                                        ?: peer.displayName.split(",").firstOrNull()?.trim()?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
+                                        ?: "user"
                                     Box(
                                         modifier = Modifier
                                             .offset(x = offsetX, y = offsetY)
@@ -615,7 +617,9 @@ fun SyncPeerCard(
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    val igHandle = peer.instagramUsername ?: peer.displayName.filter { it.isLetterOrDigit() || it == '_' || it == '.' }.lowercase()
+    val igHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
+        ?: peer.displayName.split(",").firstOrNull()?.trim()?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
+        ?: "user"
 
     Card(
         modifier = Modifier
@@ -736,7 +740,7 @@ fun SyncPeerCard(
                                 )
                         )
                         Text(
-                            text = "@",
+                            text = "@$igHandle",
                             fontFamily = DmMonoFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
@@ -789,7 +793,7 @@ fun SyncPeerCard(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "Open Instagram Profile (@)",
+                        text = "Open Instagram Profile (@$igHandle)",
                         fontFamily = DmSansFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,

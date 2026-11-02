@@ -2,6 +2,7 @@ package com.spott.app.ui.components
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,10 +41,17 @@ fun rememberPortraitBitmap(assetName: String?): ImageBitmap? {
         value = withContext(Dispatchers.IO) {
             try {
                 when {
+                    // Base64 data URL
+                    assetName.startsWith("data:image/") || assetName.startsWith("data:application/") -> {
+                        val b64 = if (assetName.contains(",")) assetName.substringAfter(",") else assetName
+                        val bytes = Base64.decode(b64, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                    }
                     // Content URI from system photo picker
                     assetName.startsWith("content://") || assetName.startsWith("file://") -> {
                         context.contentResolver.openInputStream(Uri.parse(assetName))?.use { stream ->
-                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                            val bytes = stream.readBytes()
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
                         }
                     }
                     // Direct absolute file path
@@ -52,21 +60,47 @@ fun rememberPortraitBitmap(assetName: String?): ImageBitmap? {
                     }
                     // Server static photo path or remote Instagram CDN URL
                     assetName.startsWith("/static/") || assetName.startsWith("http://") || assetName.startsWith("https://") -> {
-                        val fullUrl = if (assetName.startsWith("/static/")) "${SyncApiConfig.activeBaseUrl}$assetName" else assetName
-                        val conn = (URL(fullUrl).openConnection() as HttpURLConnection).apply {
-                            connectTimeout = 8000
-                            readTimeout = 8000
-                            setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+                        var currentUrl = if (assetName.startsWith("/static/")) "${SyncApiConfig.activeBaseUrl}$assetName" else assetName
+                        var redirects = 0
+                        var bytes: ByteArray? = null
+
+                        while (redirects < 5 && bytes == null) {
+                            val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                                connectTimeout = 10000
+                                readTimeout = 10000
+                                instanceFollowRedirects = true
+                                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                                setRequestProperty("Accept", "image/*,*/*;q=0.8")
+                            }
+                            val code = conn.responseCode
+                            if (code in 300..399) {
+                                val location = conn.getHeaderField("Location")
+                                conn.disconnect()
+                                if (!location.isNullOrEmpty()) {
+                                    currentUrl = location
+                                    redirects++
+                                    continue
+                                } else {
+                                    break
+                                }
+                            } else if (code in 200..299) {
+                                bytes = conn.inputStream.use { it.readBytes() }
+                                conn.disconnect()
+                            } else {
+                                conn.disconnect()
+                                break
+                            }
                         }
-                        conn.inputStream.use { stream ->
-                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                        bytes?.let {
+                            BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap()
                         }
                     }
                     // Local asset name
                     else -> {
                         val cleanName = if (assetName.startsWith("portraits/")) assetName else "portraits/$assetName"
                         context.assets.open(cleanName).use { stream ->
-                            BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                            val bytes = stream.readBytes()
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
                         }
                     }
                 }
