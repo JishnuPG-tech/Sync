@@ -18,8 +18,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("spottSigning") {
+            storeFile = file("spott-release.keystore")
+            storePassword = "spottpassword"
+            keyAlias = "spott"
+            keyPassword = "spottpassword"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("spottSigning")
+        }
         release {
+            signingConfig = signingConfigs.getByName("spottSigning")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
