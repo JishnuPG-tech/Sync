@@ -40,7 +40,7 @@ Thumbs.db
 
 *.apk
 -e 
-web/node_modules
-web/dist
-.agents
-
+# WebApp
+web/node_modules/
+web/dist/
+.agents/
