@@ -90,7 +90,6 @@ def register_user(user_in: UserCreate):
     existing = crud.get_user_by_instagram(user_in.instagram_username)
     if existing:
         # Existing user logging back in: update profile fields and ensure discovery is active
-        supabase = get_supabase()
         now_iso = datetime.now(timezone.utc).isoformat()
         update_data = {
             "display_name": user_in.display_name.strip(),
@@ -98,11 +97,29 @@ def register_user(user_in: UserCreate):
             "bio": user_in.bio.strip() if user_in.bio else "",
             "location_name": user_in.location.strip() if user_in.location else "",
             "avatar_url": user_in.avatar_url,
-            "is_discovery_active": True,
+            "is_discovery_active": 1,
             "updated_at": now_iso
         }
-        res = supabase.table("users").update(update_data).eq("id", existing["id"]).execute()
-        updated = res.data[0] if res.data else existing
+        with crud.sqlite3.connect(crud.DB_PATH) as conn:
+            conn.execute("""
+                UPDATE users SET display_name = ?, sync_username = ?, bio = ?,
+                location_name = ?, avatar_url = ?, is_discovery_active = 1, updated_at = ?
+                WHERE id = ?
+            """, (
+                update_data["display_name"], update_data["sync_username"],
+                update_data["bio"], update_data["location_name"],
+                update_data["avatar_url"], update_data["updated_at"], existing["id"]
+            ))
+            conn.commit()
+
+        if is_supabase_configured():
+            try:
+                supabase = get_supabase()
+                supabase.table("users").update({**update_data, "is_discovery_active": True}).eq("id", existing["id"]).execute()
+            except Exception as e:
+                print(f"[USERS] Supabase update notice: {e}")
+
+        updated = crud.get_user_by_id(existing["id"]) or existing
         return _dict_to_profile(updated)
 
     user = crud.create_user(user_in)

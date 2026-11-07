@@ -17,7 +17,7 @@ def update_location(ping: LocationPing):
         pass
     return {"status": "success", "message": "Location updated"}
 
-@router.get("/nearby", response_model=List[NearbyUserCard])
+@router.get("/nearby", response_model=List[NearbyUserCard], response_model_exclude_none=True)
 def get_nearby_peers_query(
     user_id: str = Query(..., description="User ID"),
     lat: Optional[float] = Query(None, description="Optional latitude for atomic location update"),
@@ -35,8 +35,6 @@ def get_nearby_peers_query(
             pass
 
     eff_distance = radius or max_distance or 50000.0
-    if eff_distance < 1000.0:
-        eff_distance = 50000.0
 
     return crud.get_nearby_active_users(
         current_user_id=user_id,
@@ -44,7 +42,7 @@ def get_nearby_peers_query(
         max_age_minutes=1440
     )
 
-@router.get("/nearby/{user_id}", response_model=List[NearbyUserCard])
+@router.get("/nearby/{user_id}", response_model=List[NearbyUserCard], response_model_exclude_none=True)
 def get_nearby_peers(
     user_id: str,
     lat: Optional[float] = Query(None, description="Optional latitude for atomic location update"),
@@ -62,8 +60,6 @@ def get_nearby_peers(
             pass
 
     eff_distance = radius or max_distance or 50000.0
-    if eff_distance < 1000.0:
-        eff_distance = 50000.0
 
     return crud.get_nearby_active_users(
         current_user_id=user_id,
@@ -71,7 +67,7 @@ def get_nearby_peers(
         max_age_minutes=1440
     )
 
-@router.post("/resolve-ble-token", response_model=NearbyUserCard)
+@router.post("/resolve-ble-token", response_model=NearbyUserCard, response_model_exclude_none=True)
 def resolve_ble_token(payload: BleTokenResolveRequest):
     """Resolves opaque ephemeral BLE token to NearbyUserCard (No Instagram handle)."""
     card = crud.resolve_ble_peer(payload.scanner_user_id, payload.ble_token)

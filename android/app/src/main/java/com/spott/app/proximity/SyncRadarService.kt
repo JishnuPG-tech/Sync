@@ -137,8 +137,8 @@ class SyncRadarService : Service() {
             } else {
                 val token = UserSession.getBleToken(this)
                 val igHandle = UserSession.getInstagramUsername(this)
-                val broadcastName = if (igHandle.isNotBlank()) "IG:$igHandle" else UserSession.getDisplayName(this)
-                bleManager?.setPowerMode(RadarPowerMode.SMART_DISCOVERY, token, broadcastName)
+                val displayName = UserSession.getDisplayName(this)
+                bleManager?.setPowerMode(RadarPowerMode.SMART_DISCOVERY, token, displayName, igHandle)
             }
         }
         thermalController?.startMonitoring()
@@ -149,7 +149,7 @@ class SyncRadarService : Service() {
 
         val proximityEvaluator = ProximityEvaluator(
             windowSize = 3,
-            
+            entryThresholdDbm = -105,
             minSightingsForExtended = 1,
             minSightingsForClose = 1
         )
@@ -182,9 +182,16 @@ class SyncRadarService : Service() {
             val parts = broadcastName.split("|")
             displayName = parts[0].trim()
             igHandle = parts.getOrNull(1)?.trim() ?: ""
-        } else {
+        } else if (broadcastName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(broadcastName)) {
             displayName = broadcastName
-            igHandle = broadcastName
+            igHandle = ""
+        } else {
+            displayName = "Nearby Spott User"
+            igHandle = ""
+        }
+
+        if (BleDiscoveryManager.isDeviceHardwareName(displayName)) {
+            displayName = if (igHandle.isNotBlank()) igHandle else "Nearby Spott User"
         }
 
         val rawToken = observation.deviceToken
@@ -208,18 +215,21 @@ class SyncRadarService : Service() {
                     var resolvedIg = igHandle
                     var resolvedName = displayName
 
-                    // If over-the-air BLE packet only had token, resolve identity via backend
+                    // If over-the-air BLE packet only had token or missing handle, resolve identity via backend
                     if (resolvedIg.isBlank() && myUserId.isNotBlank()) {
                         val res = apiClient.resolveBleToken(myUserId, rawToken)
                         val card = res.getOrNull()
                         if (card != null) {
-                            resolvedIg = card.instagramUsername ?: card.displayName
-                            resolvedName = card.displayName
+                            resolvedIg = card.instagramUsername ?: ""
+                            if (card.displayName.isNotBlank()) {
+                                resolvedName = card.displayName
+                            }
                         }
                     }
 
-                    if (resolvedIg.isBlank()) resolvedIg = "someone"
-                    if (resolvedName.isBlank()) resolvedName = resolvedIg
+                    if (resolvedName.isBlank() || BleDiscoveryManager.isDeviceHardwareName(resolvedName)) {
+                        resolvedName = if (resolvedIg.isNotBlank()) resolvedIg else "Nearby Spott User"
+                    }
 
                     withContext(Dispatchers.Main) {
                         NotificationHelper.postPeerDetectedNotification(
@@ -265,32 +275,23 @@ class SyncRadarService : Service() {
         val token = UserSession.getBleToken(this)
         val igHandle = UserSession.getInstagramUsername(this)
         val displayName = UserSession.getDisplayName(this)
-        
-        // Broadcast format: "IG:<handle>" or "<name>|<handle>"
-        val broadcastName = if (igHandle.isNotBlank()) {
-            "IG:$igHandle"
-        } else {
-            displayName.ifBlank { "Sync" }
-        }
 
-        // Foreground: AGGRESSIVE for sub-second radar sweep
-        // Background: BALANCED / PASSIVE with hardware filtering to guarantee ZERO battery drain
         val targetMode = if (isAppInForeground) {
             RadarPowerMode.EXTENDED_RANGE
         } else {
             RadarPowerMode.SMART_DISCOVERY
         }
 
-        Log.i(TAG, "Starting BLE Radar in mode: $targetMode with broadcast name: $broadcastName")
-        bleManager?.setPowerMode(targetMode, token, broadcastName)
-        val isGhost = com.spott.app.data.UserSession.isGhostMode(this) && com.spott.app.data.UserSession.isAdmin(this)
+        Log.i(TAG, "Starting BLE Radar in mode: $targetMode (DisplayName: $displayName, IG: $igHandle)")
+        bleManager?.setPowerMode(targetMode, token, displayName, igHandle)
+        val isGhost = UserSession.isGhostMode(this) && UserSession.isAdmin(this)
         bleManager?.setGhostMode(isGhost)
     }
 
     private fun updateRadarPowerMode() {
         val token = UserSession.getBleToken(this)
         val igHandle = UserSession.getInstagramUsername(this)
-        val broadcastName = if (igHandle.isNotBlank()) "IG:$igHandle" else UserSession.getDisplayName(this)
+        val displayName = UserSession.getDisplayName(this)
 
         val targetMode = if (isAppInForeground) {
             RadarPowerMode.EXTENDED_RANGE
@@ -299,7 +300,7 @@ class SyncRadarService : Service() {
         }
 
         Log.i(TAG, "App foreground state changed ($isAppInForeground) -> switching power mode to $targetMode")
-        bleManager?.setPowerMode(targetMode, token, broadcastName)
+        bleManager?.setPowerMode(targetMode, token, displayName, igHandle)
     }
 
     private fun stopRadarEngine() {

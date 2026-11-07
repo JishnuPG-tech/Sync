@@ -723,8 +723,13 @@ fun ProfileSetupScreen(
                             } catch (_: Exception) {}
                         }
                         val avatarToSave = finalUploadedUrl ?: instagramAvatarUrl ?: selectedPhotoUri?.toString()
+                        val finalDisplayName = if (!com.spott.app.proximity.BleDiscoveryManager.isDeviceHardwareName(displayName)) {
+                            displayName.trim()
+                        } else {
+                            instagramHandle.trim().removePrefix("@")
+                        }
                         val result = apiClient.registerUser(
-                            displayName = displayName,
+                            displayName = finalDisplayName,
                             syncUsername = syncUsername,
                             instagramUsername = instagramHandle,
                             bio = bio,

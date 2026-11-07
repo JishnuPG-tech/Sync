@@ -295,9 +295,7 @@ fun RadarScreen(
                                     val offsetX = (radius.value * cos(rad)).dp
                                     val offsetY = (radius.value * sin(rad)).dp
 
-                                    val pinHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
-                                        ?: peer.displayName.split(",").firstOrNull()?.trim()?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
-                                        ?: "user"
+                                    val pinHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() } ?: ""
                                     Box(
                                         modifier = Modifier
                                             .offset(x = offsetX, y = offsetY)
@@ -306,8 +304,7 @@ fun RadarScreen(
                                             .background(AuraTheme.colors.surface)
                                             .border(1.5.dp, AuraTheme.colors.accent, CircleShape)
                                             .clickable {
-                                                val intent = NotificationHelper.createInstagramIntent(context, pinHandle)
-                                                context.startActivity(intent)
+                                                NotificationHelper.launchInstagram(context, pinHandle)
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -617,16 +614,13 @@ fun SyncPeerCard(
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    val igHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
-        ?: peer.displayName.split(",").firstOrNull()?.trim()?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() }
-        ?: "user"
+    val igHandle = peer.instagramUsername?.trim()?.removePrefix("@")?.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.' }?.lowercase()?.takeIf { it.isNotBlank() } ?: ""
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                val intent = NotificationHelper.createInstagramIntent(context, igHandle)
-                context.startActivity(intent)
+                NotificationHelper.launchInstagram(context, igHandle)
             },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.surface),
@@ -724,8 +718,7 @@ fun SyncPeerCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .clickable {
-                                val intent = NotificationHelper.createInstagramIntent(context, igHandle)
-                                context.startActivity(intent)
+                                NotificationHelper.launchInstagram(context, igHandle)
                             }
                             .padding(vertical = 2.dp)
                     ) {
@@ -740,7 +733,7 @@ fun SyncPeerCard(
                                 )
                         )
                         Text(
-                            text = "@$igHandle",
+                            text = if (igHandle.isNotBlank()) "@$igHandle" else "Spott Member",
                             fontFamily = DmMonoFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
@@ -777,8 +770,7 @@ fun SyncPeerCard(
                         )
                     )
                     .clickable {
-                        val intent = NotificationHelper.createInstagramIntent(context, igHandle)
-                        context.startActivity(intent)
+                        NotificationHelper.launchInstagram(context, igHandle)
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -793,7 +785,7 @@ fun SyncPeerCard(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "Open Instagram Profile (@$igHandle)",
+                        text = if (igHandle.isNotBlank()) "Open Instagram Profile (@$igHandle)" else "Open Instagram Profile",
                         fontFamily = DmSansFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.spott.app.MainActivity
 import com.spott.app.R
@@ -100,14 +101,22 @@ object NotificationHelper {
         val cleanHandle = instagramHandle.trim().removePrefix("@").filter {
             it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.'
         }.lowercase()
+
+        val isValidHandle = cleanHandle.isNotBlank() &&
+                cleanHandle != "user" &&
+                cleanHandle != "someone" &&
+                cleanHandle != "spott.user" &&
+                !cleanHandle.startsWith("poco") &&
+                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
 
         // 1. Action: Open native Instagram profile or web fallback
-        val igIntent = createInstagramIntent(context, cleanHandle)
+        val igIntent = createInstagramIntent(context, if (isValidHandle) cleanHandle else "")
         val igPendingIntent = PendingIntent.getActivity(
             context,
-            cleanHandle.hashCode(),
+            encounterId.hashCode() + 1,
             igIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -124,30 +133,40 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = if (displayName.isNotBlank() && !displayName.equals("Nearby Sync User", ignoreCase = true) && !displayName.equals(cleanHandle, ignoreCase = true)) {
+        val title = if (isValidHandle && displayName.isNotBlank() && !displayName.equals(cleanHandle, ignoreCase = true)) {
             "👋 $displayName (@$cleanHandle) is nearby!"
+        } else if (isValidHandle) {
+            "👋 @$cleanHandle is nearby!"
+        } else if (displayName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(displayName)) {
+            "👋 $displayName is nearby!"
         } else {
-            "👋 @$cleanHandle spotted nearby!"
+            "👋 New person spotted nearby!"
         }
 
-        val text = "Detected ~$distanceDisplay away · Tap to connect on Instagram."
+        val text = "Detected ~$distanceDisplay away · Tap to connect."
+
+        val bigText = if (isValidHandle) {
+            "$text\nInstagram Profile: @$cleanHandle"
+        } else {
+            text
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ENCOUNTERS_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text + "\nInstagram Profile: @" + cleanHandle))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(syncPendingIntent)
-            .addAction(0, "Open Instagram ↗", igPendingIntent)
+            .addAction(0, if (isValidHandle) "Open Instagram ↗" else "Open Spott", if (isValidHandle) igPendingIntent else syncPendingIntent)
             .addAction(0, "View in Spott", syncPendingIntent)
             .build()
 
-        val notifId = PEER_NOTIFICATION_BASE_ID + (cleanHandle.hashCode() and 0x7FFF)
+        val notifId = PEER_NOTIFICATION_BASE_ID + (encounterId.hashCode() and 0x7FFF)
         try {
             manager.notify(notifId, notification)
         } catch (e: Exception) {
@@ -156,20 +175,29 @@ object NotificationHelper {
     }
 
     /**
-     * Creates direct deep link into Instagram app, or web fallback if app is not installed
+     * Creates direct deep link into official Instagram app using native uri,
+     * or web fallback if app is not installed.
+     * Prevents deprecated _u/ links and non-existent handles from creating blank black screens!
      */
     fun createInstagramIntent(context: Context, rawHandle: String): Intent {
         val cleanHandle = rawHandle.trim().removePrefix("@").filter {
             it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.'
         }.lowercase()
 
-        val targetUrl = if (cleanHandle.isNotEmpty() && cleanHandle != "user" && cleanHandle != "spott.user") {
-            "https://instagram.com/_u/$cleanHandle"
-        } else {
-            "https://instagram.com/"
+        val isValidHandle = cleanHandle.isNotBlank() &&
+                cleanHandle != "user" &&
+                cleanHandle != "spott.user" &&
+                cleanHandle != "someone" &&
+                !cleanHandle.startsWith("poco") &&
+                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+
+        if (!isValidHandle) {
+            val pm = context.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage("com.instagram.android")
+            return launchIntent ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://www.instagram.com/")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
         }
-        val appUri = Uri.parse(targetUrl)
-        val webUri = Uri.parse(if (cleanHandle.isNotEmpty() && cleanHandle != "user") "https://instagram.com/$cleanHandle" else "https://instagram.com/")
 
         val isAppInstalled = try {
             val pm = context.packageManager
@@ -179,14 +207,79 @@ object NotificationHelper {
             false
         }
 
+        val nativeUri = Uri.parse("instagram://user?username=$cleanHandle")
+        val webUri = Uri.parse("https://www.instagram.com/$cleanHandle/")
+
         return if (isAppInstalled) {
-            Intent(Intent.ACTION_VIEW, appUri).apply {
+            Intent(Intent.ACTION_VIEW, nativeUri).apply {
                 setPackage("com.instagram.android")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
         } else {
             Intent(Intent.ACTION_VIEW, webUri).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+        }
+    }
+
+    /**
+     * Safely launches Instagram native profile without freezing on blank black screens.
+     */
+    fun launchInstagram(context: Context, rawHandle: String) {
+        val cleanHandle = rawHandle.trim().removePrefix("@").filter {
+            it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' || it == '.'
+        }.lowercase()
+
+        val isValidHandle = cleanHandle.isNotBlank() &&
+                cleanHandle != "user" &&
+                cleanHandle != "spott.user" &&
+                cleanHandle != "someone" &&
+                !cleanHandle.startsWith("poco") &&
+                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+
+        if (!isValidHandle) {
+            try {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage("com.instagram.android")
+                if (launchIntent != null) {
+                    context.startActivity(launchIntent)
+                    return
+                }
+            } catch (_: Exception) {}
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.instagram.com/")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+            } catch (_: Exception) {
+                Toast.makeText(context, "Instagram profile is resolving...", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        val nativeUri = Uri.parse("instagram://user?username=$cleanHandle")
+        val webUri = Uri.parse("https://www.instagram.com/$cleanHandle/")
+
+        try {
+            val appIntent = Intent(Intent.ACTION_VIEW, nativeUri).apply {
+                setPackage("com.instagram.android")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(appIntent)
+        } catch (e: Exception) {
+            try {
+                val webAppIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+                    setPackage("com.instagram.android")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(webAppIntent)
+            } catch (e2: Exception) {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(browserIntent)
+                } catch (e3: Exception) {
+                    Toast.makeText(context, "Could not open Instagram profile", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

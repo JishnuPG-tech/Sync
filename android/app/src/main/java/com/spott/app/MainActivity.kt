@@ -107,7 +107,8 @@ class MainActivity : ComponentActivity() {
                 checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
             } else {
-                true
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             }
         }
 
@@ -126,6 +127,13 @@ class MainActivity : ComponentActivity() {
                     }
                     if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                         missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                } else {
+                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                    if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        missing.add(Manifest.permission.ACCESS_COARSE_LOCATION)
                     }
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -188,6 +196,9 @@ class MainActivity : ComponentActivity() {
                     perms.add(Manifest.permission.BLUETOOTH_SCAN)
                     perms.add(Manifest.permission.BLUETOOTH_ADVERTISE)
                     perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+                } else {
+                    perms.add(Manifest.permission.ACCESS_FINE_LOCATION)
+                    perms.add(Manifest.permission.ACCESS_COARSE_LOCATION)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     perms.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -318,20 +329,23 @@ class MainActivity : ComponentActivity() {
             val lastSeenMonotonicMap = remember { ConcurrentHashMap<String, Long>() }
 
             fun processObservation(observation: FilteredBleObservation) {
-                if (powerMode == RadarPowerMode.OFF || currentUserId.isBlank()) return
+                if (powerMode == RadarPowerMode.OFF) return
                 val rawToken = observation.deviceToken
+                val myBleToken = UserSession.getBleToken(this@MainActivity)
+                if (rawToken.equals(myBleToken, ignoreCase = true)) return
+
                 val nowElapsed = SystemClock.elapsedRealtime()
                 lastSeenMonotonicMap[rawToken] = nowElapsed
 
                 val distDisplay = when (observation.proximityTier) {
                     ProximityTier.VERY_CLOSE -> "Very Close • 1-3m"
                     ProximityTier.NEARBY -> "Nearby • ~5m"
-                    ProximityTier.EXTENDED -> "Extended • ~15m"
+                    ProximityTier.EXTENDED -> "In Range • ~12m"
                 }
 
                 val broadcastName = observation.broadcastDisplayName ?: ""
                 var parsedIg: String? = null
-                var parsedName = broadcastName
+                var parsedName: String
 
                 if (broadcastName.startsWith("IG:", ignoreCase = true)) {
                     parsedIg = broadcastName.substring(3).trim()
@@ -340,31 +354,44 @@ class MainActivity : ComponentActivity() {
                     val parts = broadcastName.split("|")
                     parsedName = parts[0].trim()
                     parsedIg = parts.getOrNull(1)?.trim()
-                } else if (broadcastName.isNotBlank()) {
-                    parsedIg = broadcastName
+                } else if (broadcastName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(broadcastName)) {
+                    parsedName = broadcastName
+                    parsedIg = null
+                } else {
+                    parsedName = "Nearby Spott User"
+                    parsedIg = null
                 }
 
-                // 1. In-Memory Cache Hit
-                val cachedProfile = resolvedProfileCache[rawToken]
-                if (cachedProfile != null) {
-                    val updatedUi = cachedProfile.copy(
+                if (BleDiscoveryManager.isDeviceHardwareName(parsedName)) {
+                    parsedName = parsedIg ?: "Nearby Spott User"
+                }
+
+                // 1. Existing Peer / In-Memory Cache Hit
+                val provisionalId = tokenToUserIdMap[rawToken] ?: rawToken
+                val existingPeer = blePeersMap[provisionalId] ?: resolvedProfileCache[rawToken]
+
+                if (existingPeer != null) {
+                    val finalIg = existingPeer.instagramUsername ?: parsedIg
+                    val finalName = if (!BleDiscoveryManager.isDeviceHardwareName(existingPeer.displayName)) {
+                        existingPeer.displayName
+                    } else {
+                        finalIg ?: parsedName
+                    }
+                    val updatedUi = existingPeer.copy(
+                        displayName = finalName,
                         distanceDisplay = distDisplay,
                         isCurrentlyInRange = true,
                         confidenceTier = observation.proximityTier,
                         lastSeenElapsedMs = nowElapsed,
-                        instagramUsername = cachedProfile.instagramUsername ?: parsedIg
+                        instagramUsername = finalIg
                     )
-                    blePeersMap[cachedProfile.encounterId] = updatedUi
+                    blePeersMap[provisionalId] = updatedUi
                     updateCombinedPeers()
-                    return
-                }
-
-                // 2. Instant Optimistic Render
-                val provisionalId = tokenToUserIdMap[rawToken] ?: rawToken
-                if (!blePeersMap.containsKey(provisionalId)) {
+                } else {
+                    // 2. Instant Optimistic Render for new peer
                     val instantUi = NearbyPeerUiModel(
                         encounterId = provisionalId,
-                        displayName = parsedName.ifBlank { "Nearby Sync User" },
+                        displayName = parsedName,
                         introduction = "Discovered in physical proximity via Bluetooth Low Energy",
                         avatarAsset = null,
                         distanceDisplay = distDisplay,
@@ -377,21 +404,29 @@ class MainActivity : ComponentActivity() {
                     updateCombinedPeers()
                 }
 
-                // 3. Fast Deduplicated Backend Metadata Enrichment
+                // 3. Fast Deduplicated Backend Metadata Enrichment (bio, photo avatar)
                 val lastFailed = failedLookupCooldown[rawToken] ?: 0L
-                if (nowElapsed - lastFailed < 2_500L) return
+                if (nowElapsed - lastFailed < 4_000L) return
                 if (inFlightLookups[rawToken] == true) return
 
                 inFlightLookups[rawToken] = true
                 coroutineScope.launch {
                     try {
-                        val resolveRes = apiClient.resolveBleToken(currentUserId, rawToken)
+                        val currentUid = UserSession.getUserId(this@MainActivity) ?: ""
+                        val resolveRes = apiClient.resolveBleToken(currentUid, rawToken)
                         if (resolveRes.isSuccess) {
                             val peerCard = resolveRes.getOrNull()
-                            if (peerCard != null && peerCard.userId != currentUserId) {
+                            if (peerCard != null && peerCard.userId != currentUid) {
+                                val cleanDisplayName = if (!BleDiscoveryManager.isDeviceHardwareName(peerCard.displayName)) {
+                                    peerCard.displayName
+                                } else if (peerCard.instagramUsername != null) {
+                                    peerCard.instagramUsername
+                                } else {
+                                    parsedName
+                                }
                                 val peerUi = NearbyPeerUiModel(
                                     encounterId = peerCard.userId,
-                                    displayName = peerCard.displayName,
+                                    displayName = cleanDisplayName,
                                     introduction = peerCard.bio,
                                     avatarAsset = peerCard.avatarUrl,
                                     distanceDisplay = distDisplay,
@@ -429,21 +464,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Presence Expiry: Prune departed peers (absence > 15s) every 3 seconds
+            // Presence Maintenance: Mark out of range gracefully and prune departed peers
             LaunchedEffect(powerMode) {
                 while (powerMode != RadarPowerMode.OFF) {
-                    delay(3_000)
+                    delay(4_000)
                     val now = SystemClock.elapsedRealtime()
                     var changed = false
                     val iterator = lastSeenMonotonicMap.entries.iterator()
                     while (iterator.hasNext()) {
                         val entry = iterator.next()
-                        if (now - entry.value > 15_000L) {
-                            val userId = tokenToUserIdMap[entry.key]
-                            if (userId != null) {
-                                blePeersMap.remove(userId)
+                        val token = entry.key
+                        val lastSeen = entry.value
+                        val elapsed = now - lastSeen
+
+                        val targetId = tokenToUserIdMap[token] ?: token
+                        val peer = blePeersMap[targetId]
+
+                        if (peer != null) {
+                            // If silent > 30s: mark as out of range, but keep visible in list
+                            if (elapsed > 30_000L && peer.isCurrentlyInRange) {
+                                blePeersMap[targetId] = peer.copy(
+                                    isCurrentlyInRange = false,
+                                    distanceDisplay = "Out of range"
+                                )
                                 changed = true
                             }
+                            // If silent > 90s: peer fully departed, remove from active radar
+                            if (elapsed > 90_000L) {
+                                blePeersMap.remove(targetId)
+                                iterator.remove()
+                                changed = true
+                            }
+                        } else if (elapsed > 90_000L) {
                             iterator.remove()
                         }
                     }
@@ -454,7 +506,7 @@ class MainActivity : ComponentActivity() {
             }
 
             // Manage hardware BLE radios based on powerMode & hardware toggles (Pure BLE)
-            DisposableEffect(powerMode, currentUserId, currentDisplayName, isBluetoothEnabled, hasBluetoothPermission) {
+            DisposableEffect(powerMode, currentUserId, isBluetoothEnabled, hasBluetoothPermission) {
                 if (powerMode != RadarPowerMode.OFF && currentUserId.isNotBlank()) {
                     coroutineScope.launch {
                         apiClient.toggleDiscovery(currentUserId, true)
@@ -463,7 +515,7 @@ class MainActivity : ComponentActivity() {
                     if (isBluetoothEnabled && hasBluetoothPermission) {
                         SyncRadarService.startService(this@MainActivity, isAppForeground = true)
                     }
-                } else {
+                } else if (powerMode == RadarPowerMode.OFF) {
                     if (currentUserId.isNotBlank()) {
                         coroutineScope.launch {
                             apiClient.toggleDiscovery(currentUserId, false)

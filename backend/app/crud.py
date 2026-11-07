@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 from app.supabase_client import get_supabase
+from app.services.storage import is_supabase_configured
 from app.schemas import UserCreate, NearbyUserCard, MutualConnectionReveal
 from app.services.geo import haversine_distance_meters
 
@@ -207,15 +208,46 @@ def get_user_by_ble_token(ble_token: str) -> Optional[Dict[str, Any]]:
     raw = ble_token.strip().lower()
     clean = raw.replace("-", "")
 
+    # 1. Check local SQLite
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("""
             SELECT * FROM users
-            WHERE ble_token = ? OR ble_token = ? OR id = ? OR ble_token LIKE ?
-        """, (raw, clean, raw, f"{clean[:16]}%"))
+            WHERE ble_token = ? OR ble_token = ? OR id = ? OR ble_token LIKE ? OR id LIKE ?
+        """, (raw, clean, raw, f"{clean[:16]}%", f"{clean[:16]}%"))
         row = cur.fetchone()
         if row:
             return _dict_from_row(cur, row)
+
+    # 2. Check Supabase (for multi-device / persistent cloud resolution)
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase()
+            prefix = clean[:16]
+            res = supabase.table("users").select("*").or_(
+                f"ble_token.eq.{raw},ble_token.eq.{clean},ble_token.ilike.{prefix}%,id.eq.{raw},id.ilike.{prefix}%"
+            ).limit(1).execute()
+            if res.data:
+                user = res.data[0]
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO users (
+                            id, display_name, sync_username, instagram_username, bio, location_name,
+                            avatar_url, ble_token, interests_csv, is_discovery_active, fcm_token,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        user["id"], user["display_name"], user.get("sync_username"),
+                        user["instagram_username"], user.get("bio", ""), user.get("location_name", ""),
+                        user.get("avatar_url"), user.get("ble_token"), user.get("interests_csv", ""),
+                        1 if user.get("is_discovery_active", True) else 0, user.get("fcm_token"),
+                        user.get("created_at"), user.get("updated_at")
+                    ))
+                    conn.commit()
+                return user
+        except Exception as e:
+            print(f"[CRUD] Supabase resolve token notice: {e}")
+
     return None
 
 def update_user_discovery(user_id: str, is_active: bool) -> Optional[Dict[str, Any]]:
@@ -260,7 +292,7 @@ def resolve_ble_peer(scanner_user_id: str, ble_token: str) -> Optional[NearbyUse
         interests=interests,
         approx_distance_meters=0.0,
         connection_status=conn_status,
-        instagram_username=peer.get("instagram_username")
+        instagram_username=peer.get("instagram_username") if conn_status == "ACCEPTED" else None
     )
 
 # ============================================================================
@@ -347,7 +379,7 @@ def get_nearby_active_users(
         for r in cur.fetchall():
             locations_by_user[r[0]] = {'latitude': r[1], 'longitude': r[2], 'updated_at': r[3]}
 
-        cur.execute('SELECT * FROM users WHERE id != ?', (current_user_id,))
+        cur.execute('SELECT * FROM users WHERE id != ? AND is_discovery_active = 1', (current_user_id,))
         all_users = [_dict_from_row(cur, r) for r in cur.fetchall()]
 
     try:
@@ -364,6 +396,8 @@ def get_nearby_active_users(
     nearby_cards: List[NearbyUserCard] = []
 
     for idx, user in enumerate(all_users):
+        if not user.get('is_discovery_active', True):
+            continue
         u_loc = locations_by_user.get(user['id'])
         p_lat = u_loc['latitude'] if u_loc else None
         p_lng = u_loc['longitude'] if u_loc else None
@@ -399,7 +433,7 @@ def get_nearby_active_users(
                 confidence=conf,
                 connection_status=conn_status,
                 is_connection_pending=conn_status in ('REQUEST_SENT', 'PENDING'),
-                instagram_username=user.get('instagram_username')
+                instagram_username=user.get('instagram_username') if conn_status == 'ACCEPTED' else None
             )
         )
 
@@ -428,39 +462,45 @@ def get_connection_status(user_a_id: str, user_b_id: str) -> str:
                 return "REQUEST_SENT" if sender_id == user_a_id else "REQUEST_RECEIVED"
     return "NONE"
 
-def create_connection_request(sender_id: str, receiver_id: str) -> Dict[str, Any]:
+def create_connection_request(sender_id: str, receiver_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
     if sender_id == receiver_id:
-        return {"error": "Cannot connect with yourself"}
+        return None, "Cannot connect with yourself"
 
     now_iso = get_utc_now_iso()
     req_id = str(uuid.uuid4())
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("""
-            SELECT id FROM connection_requests
+            SELECT id, status FROM connection_requests
             WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-            LIMIT 1
+            ORDER BY created_at DESC LIMIT 1
         """, (sender_id, receiver_id, receiver_id, sender_id))
         row = cur.fetchone()
         if row:
+            existing_id, existing_status = row[0], row[1]
+            if existing_status == "PENDING":
+                return None, "A connection request is already pending between you"
+            if existing_status == "ACCEPTED":
+                return None, "You are already connected"
             conn.execute("UPDATE connection_requests SET status = 'PENDING', sender_id = ?, receiver_id = ?, created_at = ?, responded_at = NULL WHERE id = ?",
-                         (sender_id, receiver_id, now_iso, row[0]))
+                         (sender_id, receiver_id, now_iso, existing_id))
             conn.commit()
-            return {"id": row[0], "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING"}
+            return {"id": existing_id, "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING"}, "Connection request sent"
 
         conn.execute("INSERT INTO connection_requests (id, sender_id, receiver_id, status, created_at) VALUES (?, ?, ?, 'PENDING', ?)",
                      (req_id, sender_id, receiver_id, now_iso))
         conn.commit()
 
-    try:
-        supabase = get_supabase()
-        supabase.table("connection_requests").insert({"id": req_id, "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING", "created_at": now_iso}).execute()
-    except Exception:
-        pass
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase()
+            supabase.table("connection_requests").insert({"id": req_id, "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING", "created_at": now_iso}).execute()
+        except Exception:
+            pass
 
-    return {"id": req_id, "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING"}
+    return {"id": req_id, "sender_id": sender_id, "receiver_id": receiver_id, "status": "PENDING"}, "Connection request sent"
 
-def respond_to_connection_request(request_id: str, action: str, user_id: str) -> bool:
+def respond_to_connection_request(request_id: str, user_id: str, action: str) -> Tuple[bool, str]:
     new_status = "ACCEPTED" if action.upper() == "ACCEPT" else "DECLINED"
     now_iso = get_utc_now_iso()
     with sqlite3.connect(DB_PATH) as conn:
@@ -470,13 +510,17 @@ def respond_to_connection_request(request_id: str, action: str, user_id: str) ->
         conn.commit()
         updated = cur.rowcount > 0
 
-    try:
-        supabase = get_supabase()
-        supabase.table("connection_requests").update({"status": new_status, "responded_at": now_iso}).eq("id", request_id).eq("receiver_id", user_id).execute()
-    except Exception:
-        pass
+    if not updated:
+        return False, "Connection request not found or not addressed to you"
 
-    return updated
+    if is_supabase_configured():
+        try:
+            supabase = get_supabase()
+            supabase.table("connection_requests").update({"status": new_status, "responded_at": now_iso}).eq("id", request_id).eq("receiver_id", user_id).execute()
+        except Exception:
+            pass
+
+    return True, f"Request {action.lower()}ed successfully"
 
 def get_pending_requests_for_user(user_id: str) -> List[Dict[str, Any]]:
     pending_list = []

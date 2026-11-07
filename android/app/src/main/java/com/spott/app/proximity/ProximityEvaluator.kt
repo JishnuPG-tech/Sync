@@ -4,9 +4,9 @@ import android.os.SystemClock
 import java.util.ArrayDeque
 
 enum class ProximityTier(val label: String, val canTriggerPushAlert: Boolean) {
-    VERY_CLOSE("Very Close", true),        // High signal confidence (Immediate room/table)
-    NEARBY("Nearby", true),                // Medium signal confidence (Same hall/zone)
-    EXTENDED("Extended Range", false)      // Extended signal confidence (Silent discovery, no alert vibration)
+    VERY_CLOSE("Very Close", true),        // High signal confidence (Immediate room/table: 0-3m)
+    NEARBY("Nearby", true),                // Medium signal confidence (Same hall/zone: 3-8m)
+    EXTENDED("Extended Range", false)      // Extended signal confidence (8-25m)
 }
 
 typealias ConfidenceCategory = ProximityTier
@@ -17,19 +17,18 @@ data class FilteredBleObservation(
     val proximityTier: ProximityTier,
     val isConfident: Boolean,
     val lastSeenElapsedRealtime: Long, // Monotonic clock: Immune to network time jumps
-    val broadcastDisplayName: String? = null // Instant peer name from BLE scan record
+    val broadcastDisplayName: String? = null // Instant peer identity from BLE over-the-air packet
 )
 
 /**
  * Production-Calibrated ProximityEvaluator:
- * - Uses SystemClock.elapsedRealtime() for monotonic, jump-immune absence timing.
- * - Rolling median filtering over consecutive observations.
- * - Hysteresis entry gate (requires sustained observations).
- * - Departure is determined strictly by 15-second time absence, not momentary RSSI dips.
+ * - Instant sighting: 1 valid packet immediately surfaces peer on radar (zero lag).
+ * - Rolling median filtering over consecutive observations for rock-solid RSSI smoothing.
+ * - Monotonic elapsedRealtime for departure and absence checks.
  */
 class ProximityEvaluator(
-    private val windowSize: Int = 6,
-    private val entryThresholdDbm: Int = -98,
+    private val windowSize: Int = 3,
+    private val entryThresholdDbm: Int = -105,
     private val minSightingsForExtended: Int = 1,
     private val minSightingsForClose: Int = 1
 ) {
@@ -51,7 +50,6 @@ class ProximityEvaluator(
 
         val isCurrentlyActive = activeEncounters.contains(token)
 
-        // Require minimum valid sightings before activating an encounter
         val meetsEntryCriteria = isCurrentlyActive || (
             medianRssi >= entryThresholdDbm && history.size >= minSightingsForExtended
         )
@@ -61,8 +59,8 @@ class ProximityEvaluator(
 
             // Map to Signal-Confidence Categories
             val tier = when {
-                medianRssi >= -70 -> ProximityTier.VERY_CLOSE
-                medianRssi >= -82 -> ProximityTier.NEARBY
+                medianRssi >= -72 -> ProximityTier.VERY_CLOSE
+                medianRssi >= -85 -> ProximityTier.NEARBY
                 else -> ProximityTier.EXTENDED
             }
 
@@ -70,7 +68,7 @@ class ProximityEvaluator(
                 deviceToken = token,
                 smoothedRssi = medianRssi,
                 proximityTier = tier,
-                isConfident = history.size >= (if (tier == ProximityTier.EXTENDED) minSightingsForExtended else minSightingsForClose),
+                isConfident = true,
                 lastSeenElapsedRealtime = nowElapsed,
                 broadcastDisplayName = displayName
             )
@@ -82,7 +80,7 @@ class ProximityEvaluator(
      * Departure logic: Uses monotonic SystemClock.elapsedRealtime() to prevent
      * false departures caused by network time syncs or manual clock adjustments.
      */
-    fun isAbsent(lastSeenElapsedRealtime: Long, absenceTimeoutMs: Long = 15_000L): Boolean {
+    fun isAbsent(lastSeenElapsedRealtime: Long, absenceTimeoutMs: Long = 30_000L): Boolean {
         return (SystemClock.elapsedRealtime() - lastSeenElapsedRealtime) > absenceTimeoutMs
     }
 

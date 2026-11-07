@@ -8,9 +8,12 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- Legacy Bluetooth Permissions for API <= 30 -->
+    <!-- Legacy Bluetooth & Location Permissions for API <= 30 (Android 11 and lower like POCO M3) -->
+    <!-- Android OS strictly requires ACCESS_FINE_LOCATION for BLE discovery on API <= 30 -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Foreground Service & Background Execution (Zero-Drain BLE Radar) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

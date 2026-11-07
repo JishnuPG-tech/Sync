@@ -326,8 +326,7 @@ private fun IncomingRequestHeroCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                val intent = NotificationHelper.createInstagramIntent(context, heroHandle)
-                context.startActivity(intent)
+                NotificationHelper.launchInstagram(context, heroHandle)
             },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.surface),
@@ -420,8 +419,7 @@ private fun IncomingRequestHeroCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.clickable {
-                            val intent = NotificationHelper.createInstagramIntent(context, reqHandle)
-                            context.startActivity(intent)
+                            NotificationHelper.launchInstagram(context, reqHandle)
                         }
                     ) {
                         Box(
