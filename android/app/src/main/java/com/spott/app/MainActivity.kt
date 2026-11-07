@@ -290,33 +290,82 @@ class MainActivity : ComponentActivity() {
                 }
                 val combined = mutableListOf<NearbyPeerUiModel>()
                 val seenIds = mutableSetOf<String>()
+                val seenHandles = mutableSetOf<String>()
 
-                // 1. Direct BLE radio sightings take top priority
-                blePeersMap.values.forEach { peer ->
-                    combined.add(peer)
-                    seenIds.add(peer.encounterId)
+                fun normIg(p: NearbyPeerUiModel): String? =
+                    p.instagramUsername?.trim()?.removePrefix("@")?.lowercase()?.takeIf { it.isNotBlank() }
+
+                // Sort BLE peers so enriched profiles (with real avatar/names) take precedence
+                val sortedBle = blePeersMap.values.sortedByDescending {
+                    (if (!it.avatarAsset.isNullOrBlank()) 4 else 0) +
+                    (if (!it.displayName.startsWith("@") && !it.displayName.startsWith("Nearby")) 2 else 0) +
+                    (if (!it.introduction.isNullOrBlank() && !it.introduction.startsWith("Discovered in physical")) 1 else 0)
                 }
 
-                // 2. Real GPS proximity sightings (< 70m)
-                gpsPeersMap.values.forEach { peer ->
-                    if (!seenIds.contains(peer.encounterId)) {
+                sortedBle.forEach { peer ->
+                    val ig = normIg(peer)
+                    val isDup = seenIds.contains(peer.encounterId) || (ig != null && seenHandles.contains(ig))
+                    if (!isDup) {
                         combined.add(peer)
                         seenIds.add(peer.encounterId)
+                        if (ig != null) seenHandles.add(ig)
+                    }
+                }
+
+                gpsPeersMap.values.forEach { peer ->
+                    val ig = normIg(peer)
+                    val isDup = seenIds.contains(peer.encounterId) || (ig != null && seenHandles.contains(ig))
+                    if (!isDup) {
+                        combined.add(peer)
+                        seenIds.add(peer.encounterId)
+                        if (ig != null) seenHandles.add(ig)
                     }
                 }
 
                 nearbyPeers.clear()
                 nearbyPeers.addAll(combined)
 
-                // Accumulate into persistent discovered list (never deleted when radar pauses)
+                // Accumulate into persistent discovered list (strictly 1 card per person / Instagram account)
                 combined.forEach { peer ->
-                    val existingIdx = discoveredPeers.indexOfFirst { it.encounterId == peer.encounterId }
+                    val ig = normIg(peer)
+                    val existingIdx = discoveredPeers.indexOfFirst { ex ->
+                        ex.encounterId == peer.encounterId || (ig != null && normIg(ex) == ig)
+                    }
                     if (existingIdx >= 0) {
-                        discoveredPeers[existingIdx] = peer
+                        val ex = discoveredPeers[existingIdx]
+                        val bestName = if (peer.displayName.isNotBlank() && !peer.displayName.startsWith("@") && !peer.displayName.startsWith("Nearby")) {
+                            peer.displayName
+                        } else {
+                            ex.displayName
+                        }
+                        val bestAvatar = peer.avatarAsset ?: ex.avatarAsset
+                        val bestBio = if (!peer.introduction.isNullOrBlank() && !peer.introduction.startsWith("Discovered in physical")) {
+                            peer.introduction
+                        } else {
+                            ex.introduction
+                        }
+                        discoveredPeers[existingIdx] = peer.copy(
+                            displayName = bestName,
+                            avatarAsset = bestAvatar,
+                            introduction = bestBio
+                        )
                     } else {
                         discoveredPeers.add(0, peer)
                     }
                 }
+
+                // Secondary pass: ensure discoveredPeers has zero duplicate handles or IDs
+                val seenInDiscovered = mutableSetOf<String>()
+                val dupsToRemove = mutableListOf<NearbyPeerUiModel>()
+                discoveredPeers.forEach { p ->
+                    val key = normIg(p) ?: p.encounterId
+                    if (seenInDiscovered.contains(key)) {
+                        dupsToRemove.add(p)
+                    } else {
+                        seenInDiscovered.add(key)
+                    }
+                }
+                discoveredPeers.removeAll(dupsToRemove)
             }
 
             val proximityEvaluator = remember { ProximityEvaluator() }
@@ -446,6 +495,7 @@ class MainActivity : ComponentActivity() {
                                 tokenToUserIdMap[rawToken] = peerCard.userId
                                 if (provisionalId != peerCard.userId) {
                                     blePeersMap.remove(provisionalId)
+                                    discoveredPeers.removeAll { it.encounterId == provisionalId }
                                 }
                                 blePeersMap[peerCard.userId] = peerUi
                                 updateCombinedPeers()

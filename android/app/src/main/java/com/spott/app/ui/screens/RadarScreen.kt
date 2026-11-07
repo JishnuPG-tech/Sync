@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -764,12 +765,12 @@ fun SyncPeerCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Direct 1-Tap Open Instagram Profile
+            // Direct 1-Tap Open Instagram Profile (Globally Responsive & Perfectly Aligned)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         Brush.linearGradient(
                             listOf(Color(0xFF833AB4), Color(0xFFE1306C), Color(0xFFFD1D1D), Color(0xFFF77737))
@@ -777,25 +778,30 @@ fun SyncPeerCard(
                     )
                     .clickable {
                         NotificationHelper.launchInstagram(context, igHandle)
-                    },
+                    }
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.OpenInNew,
                         contentDescription = "Open Instagram Profile",
                         tint = Color.White,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(16.dp)
                     )
+                    Spacer(modifier = Modifier.width(7.dp))
                     Text(
-                        text = if (igHandle.isNotBlank()) "Open Instagram Profile (@$igHandle)" else "Open Instagram Profile",
+                        text = "Open Instagram Profile",
                         fontFamily = DmSansFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
