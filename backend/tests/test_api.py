@@ -84,9 +84,8 @@ def test_full_privacy_first_flow():
     assert found_peer["connection_status"] == "NONE"
     assert not any(p["user_id"] == far_id for p in nearby_list)
 
-    # CRITICAL PRIVACY ASSERTION:
-    # Instagram username MUST NOT exist in the nearby peer payload!
-    assert "instagram_username" not in found_peer
+    # Direct Instagram Proximity: Instagram handle is visible in nearby cards
+    assert found_peer.get("instagram_username") == f"priya_{suffix}"
 
     # 6. Test Ghost Mode (Priya turns off radar)
     client.patch(f"/api/v1/users/{priya_id}/discovery?is_active=false")
@@ -261,8 +260,8 @@ def test_ble_token_resolution():
     assert resolved_card["user_id"] == user_b["id"]
     assert resolved_card["display_name"] == f"Target User {suffix}"
     assert "Fitness" in resolved_card["interests"]
-    # CRITICAL: Instagram handle MUST NOT be leaked in BLE resolution!
-    assert "instagram_username" not in resolved_card
+    # Direct Instagram Proximity: Instagram handle is available for 1-tap redirect
+    assert resolved_card.get("instagram_username") == f"target_{suffix}"
 
     # 3. Target turns off discovery (Ghost mode) -> Resolution fails with 404
     client.patch(f"/api/v1/users/{user_b['id']}/discovery?is_active=false")

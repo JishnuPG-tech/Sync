@@ -28,6 +28,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     instagram_username: str = Field(..., min_length=1, max_length=30, description="Private Instagram handle")
     fcm_token: Optional[str] = Field(None, description="FCM device push token")
+    ble_token: Optional[str] = Field(None, description="Client BLE advertising token")
 
     @field_validator("instagram_username")
     @classmethod

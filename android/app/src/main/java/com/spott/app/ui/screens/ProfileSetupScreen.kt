@@ -728,18 +728,21 @@ fun ProfileSetupScreen(
                         } else {
                             instagramHandle.trim().removePrefix("@")
                         }
+                        val currentLocalBleToken = UserSession.getBleToken(context)
                         val result = apiClient.registerUser(
                             displayName = finalDisplayName,
                             syncUsername = syncUsername,
                             instagramUsername = instagramHandle,
                             bio = bio,
                             location = locationInput,
-                            avatarUrl = avatarToSave
+                            avatarUrl = avatarToSave,
+                            bleToken = currentLocalBleToken
                         )
 
                         if (result.isSuccess) {
                             val user = result.getOrNull()!!
                             val finalAvatar = user.photo_uri ?: avatarToSave
+                            val finalToken = user.ble_token ?: currentLocalBleToken
                             UserSession.saveUser(
                                 context = context,
                                 userId = user.id,
@@ -749,8 +752,10 @@ fun ProfileSetupScreen(
                                 bio = bio,
                                 location = locationInput,
                                 avatar = finalAvatar,
-                                bleToken = user.ble_token ?: user.id
+                                bleToken = finalToken
                             )
+                            // Crucial: Restart BLE Radar Service immediately with registered token & identity
+                            com.spott.app.proximity.SyncRadarService.startService(context, isAppForeground = true)
                             onProfileCreated(
                                 user.id,
                                 user.display_name,

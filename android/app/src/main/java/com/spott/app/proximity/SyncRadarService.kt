@@ -216,19 +216,19 @@ class SyncRadarService : Service() {
                     var resolvedName = displayName
 
                     // If over-the-air BLE packet only had token or missing handle, resolve identity via backend
-                    if (resolvedIg.isBlank() && myUserId.isNotBlank()) {
+                    if (resolvedIg.isBlank()) {
                         val res = apiClient.resolveBleToken(myUserId, rawToken)
                         val card = res.getOrNull()
                         if (card != null) {
-                            resolvedIg = card.instagramUsername ?: ""
-                            if (card.displayName.isNotBlank()) {
+                            resolvedIg = card.instagramUsername?.trim()?.removePrefix("@") ?: ""
+                            if (card.displayName.isNotBlank() && !card.displayName.startsWith("Nearby Spott User")) {
                                 resolvedName = card.displayName
                             }
                         }
                     }
 
-                    if (resolvedName.isBlank() || BleDiscoveryManager.isDeviceHardwareName(resolvedName)) {
-                        resolvedName = if (resolvedIg.isNotBlank()) resolvedIg else "Nearby Spott User"
+                    if (resolvedName.isBlank() || BleDiscoveryManager.isDeviceHardwareName(resolvedName) || resolvedName.startsWith("Nearby Spott User")) {
+                        resolvedName = if (resolvedIg.isNotBlank()) "@$resolvedIg" else "Nearby Spott User"
                     }
 
                     withContext(Dispatchers.Main) {

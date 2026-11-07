@@ -373,7 +373,7 @@ fun AuraPersonCard(
                     )
                     Column {
                         Text(
-                            text = "$displayName, $age",
+                            text = displayName,
                             style = AuraTheme.typography.titleMedium.copy(fontSize = 17.sp),
                             color = AuraTheme.colors.ink,
                             fontWeight = FontWeight.Bold,
@@ -625,7 +625,7 @@ fun PlexPersonPreviewDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "$displayName, $age",
+                    text = displayName,
                     style = AuraTheme.typography.headlineMedium.copy(fontSize = 22.sp),
                     color = AuraTheme.colors.ink,
                     fontWeight = FontWeight.Bold

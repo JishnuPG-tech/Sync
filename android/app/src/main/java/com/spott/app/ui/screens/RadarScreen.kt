@@ -653,11 +653,17 @@ fun SyncPeerCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val cleanName = peer.displayName.replace(Regex(",\\s*\\d+"), "").trim()
+                        val headerTitle = when {
+                            cleanName.isNotBlank() && !cleanName.startsWith("Nearby Spott User") && !com.spott.app.proximity.BleDiscoveryManager.isDeviceHardwareName(cleanName) -> cleanName
+                            igHandle.isNotBlank() -> "@$igHandle"
+                            else -> "Nearby Spott User"
+                        }
                         Text(
-                            text = "${peer.displayName}, ${peer.age}",
+                            text = headerTitle,
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.5.sp,
+                            fontSize = 15.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),

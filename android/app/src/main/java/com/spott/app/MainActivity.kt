@@ -372,10 +372,10 @@ class MainActivity : ComponentActivity() {
 
                 if (existingPeer != null) {
                     val finalIg = existingPeer.instagramUsername ?: parsedIg
-                    val finalName = if (!BleDiscoveryManager.isDeviceHardwareName(existingPeer.displayName)) {
-                        existingPeer.displayName
-                    } else {
-                        finalIg ?: parsedName
+                    val finalName = when {
+                        existingPeer.displayName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(existingPeer.displayName) && !existingPeer.displayName.startsWith("Nearby Spott User") -> existingPeer.displayName
+                        !finalIg.isNullOrBlank() -> "@${finalIg.removePrefix("@")}"
+                        else -> parsedName
                     }
                     val updatedUi = existingPeer.copy(
                         displayName = finalName,
@@ -389,9 +389,14 @@ class MainActivity : ComponentActivity() {
                     updateCombinedPeers()
                 } else {
                     // 2. Instant Optimistic Render for new peer
+                    val instantName = when {
+                        parsedName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(parsedName) && !parsedName.startsWith("Nearby Spott User") -> parsedName
+                        !parsedIg.isNullOrBlank() -> "@${parsedIg.removePrefix("@")}"
+                        else -> "Nearby Spott User"
+                    }
                     val instantUi = NearbyPeerUiModel(
                         encounterId = provisionalId,
-                        displayName = parsedName,
+                        displayName = instantName,
                         introduction = "Discovered in physical proximity via Bluetooth Low Energy",
                         avatarAsset = null,
                         distanceDisplay = distDisplay,
@@ -417,12 +422,11 @@ class MainActivity : ComponentActivity() {
                         if (resolveRes.isSuccess) {
                             val peerCard = resolveRes.getOrNull()
                             if (peerCard != null && peerCard.userId != currentUid) {
-                                val cleanDisplayName = if (!BleDiscoveryManager.isDeviceHardwareName(peerCard.displayName)) {
-                                    peerCard.displayName
-                                } else if (peerCard.instagramUsername != null) {
-                                    peerCard.instagramUsername
-                                } else {
-                                    parsedName
+                                val resolvedIg = peerCard.instagramUsername?.trim()?.removePrefix("@")?.takeIf { it.isNotBlank() } ?: parsedIg
+                                val cleanDisplayName = when {
+                                    peerCard.displayName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(peerCard.displayName) && !peerCard.displayName.startsWith("Nearby Spott User") -> peerCard.displayName
+                                    !resolvedIg.isNullOrBlank() -> "@$resolvedIg"
+                                    else -> parsedName
                                 }
                                 val peerUi = NearbyPeerUiModel(
                                     encounterId = peerCard.userId,
@@ -433,7 +437,7 @@ class MainActivity : ComponentActivity() {
                                     isCurrentlyInRange = true,
                                     confidenceTier = observation.proximityTier,
                                     lastSeenElapsedMs = nowElapsed,
-                                    instagramUsername = peerCard.instagramUsername ?: parsedIg
+                                    instagramUsername = resolvedIg
                                 )
                                 resolvedProfileCache[rawToken] = peerUi
                                 tokenToUserIdMap[rawToken] = peerCard.userId
@@ -655,6 +659,7 @@ class MainActivity : ComponentActivity() {
                                     currentAvatarAsset = avatar
                                     powerMode = RadarPowerMode.SMART_DISCOVERY
                                     navState = AppNavState.MAIN
+                                    SyncRadarService.startService(this@MainActivity, isAppForeground = true)
                                     fetchBackendData()
                                 }
                             )

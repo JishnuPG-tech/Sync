@@ -91,24 +91,26 @@ def register_user(user_in: UserCreate):
     if existing:
         # Existing user logging back in: update profile fields and ensure discovery is active
         now_iso = datetime.now(timezone.utc).isoformat()
+        new_ble = user_in.ble_token.strip().lower() if user_in.ble_token else existing.get("ble_token")
         update_data = {
             "display_name": user_in.display_name.strip(),
             "sync_username": user_in.sync_username.strip().lower() if user_in.sync_username else existing.get("sync_username"),
             "bio": user_in.bio.strip() if user_in.bio else "",
             "location_name": user_in.location.strip() if user_in.location else "",
             "avatar_url": user_in.avatar_url,
+            "ble_token": new_ble,
             "is_discovery_active": 1,
             "updated_at": now_iso
         }
         with crud.sqlite3.connect(crud.DB_PATH) as conn:
             conn.execute("""
                 UPDATE users SET display_name = ?, sync_username = ?, bio = ?,
-                location_name = ?, avatar_url = ?, is_discovery_active = 1, updated_at = ?
+                location_name = ?, avatar_url = ?, ble_token = ?, is_discovery_active = 1, updated_at = ?
                 WHERE id = ?
             """, (
                 update_data["display_name"], update_data["sync_username"],
                 update_data["bio"], update_data["location_name"],
-                update_data["avatar_url"], update_data["updated_at"], existing["id"]
+                update_data["avatar_url"], update_data["ble_token"], update_data["updated_at"], existing["id"]
             ))
             conn.commit()
 

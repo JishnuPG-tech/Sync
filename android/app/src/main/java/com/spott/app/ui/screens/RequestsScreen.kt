@@ -230,7 +230,7 @@ private fun IncomingRequestCard(
                 AuraInitialsAvatar(name = request.sender_display_name, size = 48)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "${request.sender_display_name}, ${request.sender_age}",
+                        text = request.sender_display_name,
                         style = AuraTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = AuraTheme.colors.ink,

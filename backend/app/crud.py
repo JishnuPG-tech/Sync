@@ -79,7 +79,7 @@ def _dict_from_row(cursor, row):
 
 def create_user(user_in: UserCreate) -> Dict[str, Any]:
     user_id = str(uuid.uuid4())
-    ble_token = str(uuid.uuid4()).replace("-", "")[:16]
+    ble_token = (user_in.ble_token or str(uuid.uuid4())).replace("-", "")[:16].lower()
     interests_str = ",".join([tag.strip() for tag in user_in.interests if tag.strip()])
     now_iso = get_utc_now_iso()
 
@@ -283,16 +283,20 @@ def resolve_ble_peer(scanner_user_id: str, ble_token: str) -> Optional[NearbyUse
     conn_status = get_connection_status(scanner_user_id, peer["id"])
     interests = [i.strip() for i in peer.get("interests_csv", "").split(",") if i.strip()]
 
+    ig_handle = (peer.get("instagram_username") or "").strip().lstrip("@")
+    raw_display = (peer.get("display_name") or "").strip()
+    final_name = raw_display if (raw_display and not raw_display.startswith("Nearby Spott User")) else (f"@{ig_handle}" if ig_handle else "Nearby Spott User")
+
     return NearbyUserCard(
         user_id=peer["id"],
-        display_name=peer["display_name"],
+        display_name=final_name,
         bio=peer.get("bio", ""),
         location=peer.get("location_name", ""),
         avatar_url=peer.get("avatar_url"),
         interests=interests,
         approx_distance_meters=0.0,
         connection_status=conn_status,
-        instagram_username=peer.get("instagram_username") if conn_status == "ACCEPTED" else None
+        instagram_username=ig_handle if ig_handle else None
     )
 
 # ============================================================================
@@ -418,11 +422,14 @@ def get_nearby_active_users(
         dist_val = round(dist, 1)
         conf = 'HIGH' if dist <= 15 else ('MEDIUM' if dist <= 100 else 'LOW')
         loc_str = user.get('location_name') or 'Nearby'
+        ig_handle = (user.get('instagram_username') or '').strip().lstrip('@')
+        raw_display = (user.get('display_name') or '').strip()
+        final_name = raw_display if (raw_display and not raw_display.startswith("Nearby Spott User")) else (f"@{ig_handle}" if ig_handle else "Nearby Spott User")
 
         nearby_cards.append(
             NearbyUserCard(
                 user_id=user['id'],
-                display_name=user['display_name'],
+                display_name=final_name,
                 bio=user.get('bio', ''),
                 location=loc_str,
                 location_name=loc_str,
@@ -433,7 +440,7 @@ def get_nearby_active_users(
                 confidence=conf,
                 connection_status=conn_status,
                 is_connection_pending=conn_status in ('REQUEST_SENT', 'PENDING'),
-                instagram_username=user.get('instagram_username') if conn_status == 'ACCEPTED' else None
+                instagram_username=ig_handle if ig_handle else None
             )
         )
 

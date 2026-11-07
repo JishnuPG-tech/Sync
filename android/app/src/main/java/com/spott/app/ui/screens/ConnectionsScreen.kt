@@ -130,7 +130,7 @@ fun ConnectionsScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "${conn.display_name}, ${conn.age}",
+                    text = conn.display_name,
                     style = AuraTheme.typography.headlineMedium,
                     color = AuraTheme.colors.ink,
                     fontWeight = FontWeight.Bold
@@ -378,7 +378,7 @@ private fun ConnectionCard(
 
 private fun launchInstagramApp(context: Context, username: String) {
     val clean = username.removePrefix("@")
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("instagram://user?username=$clean")).apply {
+    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.instagram.com/$clean/")).apply {
         `package` = "com.instagram.android"
     }
     try {

@@ -380,7 +380,7 @@ private fun IncomingRequestHeroCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${request.sender_display_name}, ${request.sender_age}",
+                            text = request.sender_display_name,
                             fontFamily = DmSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.5.sp,

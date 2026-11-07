@@ -106,8 +106,7 @@ object NotificationHelper {
                 cleanHandle != "user" &&
                 cleanHandle != "someone" &&
                 cleanHandle != "spott.user" &&
-                !cleanHandle.startsWith("poco") &&
-                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+                cleanHandle != "null"
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
@@ -133,11 +132,16 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = if (isValidHandle && displayName.isNotBlank() && !displayName.equals(cleanHandle, ignoreCase = true)) {
+        val isRealName = displayName.isNotBlank() && 
+                !displayName.equals(cleanHandle, ignoreCase = true) && 
+                !displayName.startsWith("Nearby Spott User") &&
+                !BleDiscoveryManager.isDeviceHardwareName(displayName)
+
+        val title = if (isValidHandle && isRealName) {
             "👋 $displayName (@$cleanHandle) is nearby!"
         } else if (isValidHandle) {
             "👋 @$cleanHandle is nearby!"
-        } else if (displayName.isNotBlank() && !BleDiscoveryManager.isDeviceHardwareName(displayName)) {
+        } else if (isRealName) {
             "👋 $displayName is nearby!"
         } else {
             "👋 New person spotted nearby!"
@@ -188,8 +192,7 @@ object NotificationHelper {
                 cleanHandle != "user" &&
                 cleanHandle != "spott.user" &&
                 cleanHandle != "someone" &&
-                !cleanHandle.startsWith("poco") &&
-                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+                cleanHandle != "null"
 
         if (!isValidHandle) {
             val pm = context.packageManager
@@ -207,11 +210,11 @@ object NotificationHelper {
             false
         }
 
-        val nativeUri = Uri.parse("instagram://user?username=$cleanHandle")
         val webUri = Uri.parse("https://www.instagram.com/$cleanHandle/")
 
         return if (isAppInstalled) {
-            Intent(Intent.ACTION_VIEW, nativeUri).apply {
+            // Using https web URI targeted to package handles deep link routing smoothly without black screen
+            Intent(Intent.ACTION_VIEW, webUri).apply {
                 setPackage("com.instagram.android")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -234,8 +237,7 @@ object NotificationHelper {
                 cleanHandle != "user" &&
                 cleanHandle != "spott.user" &&
                 cleanHandle != "someone" &&
-                !cleanHandle.startsWith("poco") &&
-                !BleDiscoveryManager.isDeviceHardwareName(cleanHandle)
+                cleanHandle != "null"
 
         if (!isValidHandle) {
             try {
@@ -255,32 +257,52 @@ object NotificationHelper {
             return
         }
 
-        val nativeUri = Uri.parse("instagram://user?username=$cleanHandle")
         val webUri = Uri.parse("https://www.instagram.com/$cleanHandle/")
+        val nativeUri = Uri.parse("instagram://user?username=$cleanHandle")
 
-        try {
-            val appIntent = Intent(Intent.ACTION_VIEW, nativeUri).apply {
-                setPackage("com.instagram.android")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(appIntent)
-        } catch (e: Exception) {
+        val isAppInstalled = try {
+            val pm = context.packageManager
+            pm.getPackageInfo("com.instagram.android", PackageManager.GET_ACTIVITIES)
+            true
+        } catch (_: Exception) {
+            false
+        }
+
+        if (isAppInstalled) {
+            // 1. Preferred modern route: HTTPS deep-link targeted directly to Instagram app
+            // This prevents blank black screens caused by deprecated internal URI parameters
             try {
-                val webAppIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+                val appIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
                     setPackage("com.instagram.android")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-                context.startActivity(webAppIntent)
-            } catch (e2: Exception) {
-                try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(browserIntent)
-                } catch (e3: Exception) {
-                    Toast.makeText(context, "Could not open Instagram profile", Toast.LENGTH_SHORT).show()
-                }
+                context.startActivity(appIntent)
+                return
+            } catch (e: Exception) {
+                android.util.Log.w("NotificationHelper", "Web link to app failed, trying native uri: ${e.message}")
             }
+
+            // 2. Secondary fallback: Native scheme targeted to Instagram app
+            try {
+                val nativeIntent = Intent(Intent.ACTION_VIEW, nativeUri).apply {
+                    setPackage("com.instagram.android")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(nativeIntent)
+                return
+            } catch (e2: Exception) {
+                android.util.Log.w("NotificationHelper", "Native scheme to app failed: ${e2.message}")
+            }
+        }
+
+        // 3. Fallback to Web Browser
+        try {
+            val browserIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(browserIntent)
+        } catch (e3: Exception) {
+            Toast.makeText(context, "Could not open Instagram profile: @$cleanHandle", Toast.LENGTH_SHORT).show()
         }
     }
 }

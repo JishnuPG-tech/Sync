@@ -142,7 +142,8 @@ class SyncApiClient {
         bio: String,
         location: String,
         avatarUrl: String?,
-        interests: List<String> = emptyList()
+        interests: List<String> = emptyList(),
+        bleToken: String? = null
     ): Result<UserProfile> {
         val payload = JSONObject().apply {
             put("display_name", displayName.trim())
@@ -151,6 +152,7 @@ class SyncApiClient {
             put("bio", bio.trim())
             put("location", location.trim())
             if (avatarUrl != null) put("avatar_url", avatarUrl)
+            if (!bleToken.isNullOrBlank()) put("ble_token", bleToken.trim().lowercase())
             val arr = JSONArray()
             interests.forEach { arr.put(it) }
             put("interests", arr)
