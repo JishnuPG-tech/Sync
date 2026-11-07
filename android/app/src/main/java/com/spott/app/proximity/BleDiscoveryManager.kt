@@ -55,10 +55,15 @@ class BleDiscoveryManager(
     companion object {
         private const val TAG = "BleDiscoveryManager"
         const val PROTOCOL_VERSION: Byte = 0x01
+        const val PROTOCOL_V3: Byte = 0x03
 
-        // Dedicated 128-bit Service UUID for Sync (0x5359 represents ASCII 'S' & 'Y')
+        // Dedicated 128-bit Service UUID for backward compatibility
         val SYNC_SERVICE_UUID: UUID = UUID.fromString("7b115359-9942-4f38-958b-0e54911d3312")
         val SYNC_SERVICE_PARCEL: ParcelUuid = ParcelUuid(SYNC_SERVICE_UUID)
+
+        // 16-bit Service UUID for high-density Direct Instagram Broadcast (0x5359 = 'S','Y')
+        val SYNC_16BIT_UUID: UUID = UUID.fromString("00005359-0000-1000-8000-00805f9b34fb")
+        val SYNC_16BIT_PARCEL: ParcelUuid = ParcelUuid(SYNC_16BIT_UUID)
 
         /**
          * Checks if a string looks like a hardware phone model name (e.g. POCO M3, Redmi Note, CPH2381)
@@ -176,25 +181,57 @@ class BleDiscoveryManager(
             isScanning = true
             val scanRecord = result?.scanRecord ?: return
 
-            var serviceData = scanRecord.getServiceData(SYNC_SERVICE_PARCEL)
-            if (serviceData == null) {
+            // 1. Check for 16-bit Sync Service Data (Direct Instagram Handle!)
+            var serviceData16 = scanRecord.getServiceData(SYNC_16BIT_PARCEL)
+            if (serviceData16 == null) {
                 for ((parcel, bytes) in scanRecord.serviceData) {
-                    if (parcel.uuid == SYNC_SERVICE_UUID || parcel.uuid.toString().equals(SYNC_SERVICE_UUID.toString(), ignoreCase = true)) {
-                        serviceData = bytes
+                    val uStr = parcel.uuid.toString()
+                    if (uStr.startsWith("00005359", ignoreCase = true) || uStr.equals(SYNC_16BIT_UUID.toString(), ignoreCase = true)) {
+                        serviceData16 = bytes
                         break
                     }
                 }
             }
 
-            if (serviceData == null || serviceData.size < 9) return
-            if (serviceData[0] != PROTOCOL_VERSION) return
+            var rawTokenHex: String
+            var directIdentity: String? = null
 
-            val tokenBytes = serviceData.sliceArray(1..8)
-            val rawTokenHex = bytesToHex(tokenBytes)
+            if (serviceData16 != null && serviceData16.isNotEmpty() && serviceData16[0] == PROTOCOL_V3) {
+                val handleLen = if (serviceData16.size > 1) (serviceData16[1].toInt() and 0xFF).coerceAtMost(serviceData16.size - 2) else 0
+                val ig = if (handleLen > 0) {
+                    String(serviceData16, 2, handleLen, Charsets.UTF_8).trim()
+                } else ""
+                if (ig.isNotBlank()) {
+                    directIdentity = "@$ig"
+                }
+                val tokenStart = 2 + handleLen
+                if (serviceData16.size >= tokenStart + 4) {
+                    rawTokenHex = bytesToHex(serviceData16.sliceArray(tokenStart until tokenStart + 4))
+                } else if (ig.isNotBlank()) {
+                    rawTokenHex = ig.hashCode().toLong().and(0xFFFFFFFFL).toString(16).padStart(8, '0')
+                } else {
+                    rawTokenHex = bytesToHex(serviceData16)
+                }
+            } else {
+                // Fallback: Check 128-bit Service Data (Legacy 9-byte packet)
+                var serviceData = scanRecord.getServiceData(SYNC_SERVICE_PARCEL)
+                if (serviceData == null) {
+                    for ((parcel, bytes) in scanRecord.serviceData) {
+                        if (parcel.uuid == SYNC_SERVICE_UUID || parcel.uuid.toString().equals(SYNC_SERVICE_UUID.toString(), ignoreCase = true)) {
+                            serviceData = bytes
+                            break
+                        }
+                    }
+                }
+                if (serviceData == null || serviceData.size < 9) return
+                if (serviceData[0] != PROTOCOL_VERSION) return
+                val tokenBytes = serviceData.sliceArray(1..8)
+                rawTokenHex = bytesToHex(tokenBytes)
+            }
 
             // Never leak hardware device names (e.g. POCO M3)
             val deviceName = scanRecord.deviceName?.takeIf { it.isNotBlank() }
-            val sanitizedName = if (deviceName != null && !isDeviceHardwareName(deviceName)) deviceName else null
+            val sanitizedName = directIdentity ?: if (deviceName != null && !isDeviceHardwareName(deviceName)) deviceName else null
 
             val observation = proximityEvaluator.recordObservation(rawTokenHex, result.rssi, sanitizedName)
             if (observation != null) {
@@ -366,13 +403,13 @@ class BleDiscoveryManager(
                 .build()
 
             val data = AdvertiseData.Builder()
-                .addServiceData(SYNC_SERVICE_PARCEL, payloadBytes)
+                .addServiceData(SYNC_16BIT_PARCEL, payloadBytes)
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .build()
 
             advertiser?.startAdvertising(settings, data, null, legacyAdvertiseCallback)
-            Log.i(TAG, "Initiated Universal BLE Advertising (Token: $currentTokenHex)")
+            Log.i(TAG, "Initiated Direct-Identity BLE Advertising (Handle: $currentInstagramHandle, Token: $currentTokenHex)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Universal BLE Advertising: ${e.message}", e)
             isAdvertising = false
@@ -467,17 +504,30 @@ class BleDiscoveryManager(
     }
 
     /**
-     * Builds Primary Spott Packet:
-     * [0x01 Version (1B)] + [Token (8B)]
-     * Total length: exactly 9 bytes.
+     * Builds High-Density Direct Identity Spott Packet (16-bit Service Data):
+     * [0x03 Version (1B)] + [Handle Length (1B)] + [Instagram Handle (N bytes <= 18B)] + [Token (4B)]
+     * Total length: <= 24 bytes (Total advertising packet <= 31 bytes).
+     * Provides instantaneous zero-latency, zero-server discovery directly over Bluetooth Low Energy.
      */
     private fun buildSyncPacket(): ByteArray {
-        val payload = ByteArray(9)
-        payload[0] = PROTOCOL_VERSION
+        val cleanIg = currentInstagramHandle.trim().removePrefix("@").lowercase().take(18)
+        val igBytes = cleanIg.toByteArray(Charsets.UTF_8)
         val tokenBytes = hexToBytes(currentTokenHex)
-        for (i in 0 until 8) {
-            payload[1 + i] = if (i < tokenBytes.size) tokenBytes[i] else 0
+        val tokenLen = tokenBytes.size.coerceAtMost(4)
+
+        val totalLen = 2 + igBytes.size + tokenLen
+        val payload = ByteArray(totalLen)
+        payload[0] = PROTOCOL_V3
+        payload[1] = igBytes.size.toByte()
+
+        for (i in igBytes.indices) {
+            payload[2 + i] = igBytes[i]
         }
+
+        for (i in 0 until tokenLen) {
+            payload[2 + igBytes.size + i] = tokenBytes[i]
+        }
+
         return payload
     }
 

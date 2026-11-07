@@ -347,9 +347,12 @@ class MainActivity : ComponentActivity() {
                 var parsedIg: String? = null
                 var parsedName: String
 
-                if (broadcastName.startsWith("IG:", ignoreCase = true)) {
+                if (broadcastName.startsWith("@")) {
+                    parsedIg = broadcastName.removePrefix("@").trim()
+                    parsedName = "@$parsedIg"
+                } else if (broadcastName.startsWith("IG:", ignoreCase = true)) {
                     parsedIg = broadcastName.substring(3).trim()
-                    parsedName = parsedIg
+                    parsedName = "@$parsedIg"
                 } else if (broadcastName.contains("|")) {
                     val parts = broadcastName.split("|")
                     parsedName = parts[0].trim()
