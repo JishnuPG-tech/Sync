@@ -30,8 +30,8 @@ data class InstagramVerificationResult(
 typealias bool_val = Boolean
 
 object SyncApiConfig {
-    // 24/7 Ultra-Fast Xeon Cloud Backend on HuggingFace Space
-    const val CLOUD_URL: String = "https://jishnupg-hermes.hf.space"
+    // 24/7 Ultra-Fast Cloud Backend on HuggingFace Space
+    const val CLOUD_URL: String = "https://jishnupg-opencode-cli.hf.space"
     const val RENDER_URL: String = "https://sync-enoc.onrender.com"
 
     val candidateBaseUrls: List<String> = buildList {
